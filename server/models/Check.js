@@ -154,6 +154,20 @@ const checkSchema = new mongoose.Schema(
       candidateCount: Number,
       relevantCount: Number,
       diagnostics: [mongoose.Schema.Types.Mixed],
+      // Dense passage ranking status + how many documents it ranked. Mixed,
+      // like diagnostics: it is a diagnostic snapshot, not queried.
+      passageRanking: mongoose.Schema.Types.Mixed,
+    },
+    // The LLM explanation of the verdict, already filtered by NLI. Persisted
+    // so a replayed check shows exactly the sentences the live one did —
+    // regenerating it later could produce different (and unchecked) text.
+    explanation: {
+      available: Boolean,
+      reason: String,
+      text: String,
+      sentences: [mongoose.Schema.Types.Mixed],
+      droppedCount: Number,
+      model: String,
     },
     nli: {
       available: Boolean,

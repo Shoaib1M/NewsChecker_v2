@@ -355,6 +355,15 @@ function App() {
           candidate_count: full.retrieval.candidateCount,
           relevant_count: full.retrieval.relevantCount,
           diagnostics: full.retrieval.diagnostics,
+          passage_ranking: full.retrieval.passageRanking,
+        },
+        explanation: full.explanation && {
+          available: full.explanation.available,
+          reason: full.explanation.reason,
+          text: full.explanation.text,
+          sentences: full.explanation.sentences,
+          dropped_count: full.explanation.droppedCount,
+          model: full.explanation.model,
         },
         nli: full.nli && {
           available: full.nli.available,

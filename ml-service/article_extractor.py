@@ -23,6 +23,8 @@ from html import unescape
 from html.parser import HTMLParser
 from urllib.request import Request, urlopen
 
+from passage_retriever import reciprocal_rank_fusion, semantic_order
+
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -339,18 +341,49 @@ def _content_words(text: str) -> set[str]:
     }
 
 
+def _lexical_order(sentences: list[str], claim_words: set[str]) -> tuple[list[int], list[int]]:
+    """(every index in lexical order, the indices that share any claim word).
+
+    Sort by overlap, then by original position, so ties keep article order and
+    the lede still wins when nothing matches.
+    """
+    overlaps = [len(claim_words & _content_words(s)) for s in sentences]
+    order = sorted(range(len(sentences)), key=lambda i: (-overlaps[i], i))
+    return order, [i for i in order if overlaps[i] > 0]
+
+
 def extract_passages(
     title: str,
     snippet: str,
     full_text: str,
     max_passages: int = 8,
     claim: str = "",
+    ranking_info: dict | None = None,
 ) -> list[str]:
     """Return the passages most worth showing NLI for this claim.
 
     The title and snippet always come first — they are curated summaries of
     what the article is about. The remaining slots go to the article
-    sentences with the most content-word overlap with ``claim``.
+    sentences that best match ``claim``: by content-word overlap, and — when
+    dense ranking is available — by meaning, the two merged with reciprocal
+    rank fusion (see ``passage_retriever``).
+
+    WHY DENSE RANKING WAS ADDED:
+    Overlap cannot see a paraphrase, and debunks are paraphrases. "Washington
+    has not prohibited the search giant anywhere in the country" shares no
+    word with "The United States banned Google across all its cities", so it
+    scored zero and lost its slot to any sentence that mentioned Google. The
+    embedding ranking nominates it; fusion keeps exact name and number
+    matches competitive, which embeddings blur.
+
+    Only sentences one of the two signals actually NOMINATED are fused —
+    those with some word overlap, and those above the similarity floor. The
+    rest follow in lexical order, which for them is article order. If dense
+    ranking is disabled, failed (``None``) or found nothing close (``[]``),
+    the result is exactly the lexical-only behaviour.
+
+    ``ranking_info``, when given, receives ``{"ranking": "hybrid" | "lexical"}``
+    so the pipeline can report how often the dense ranking actually decided.
 
     WHY IT RANKS RATHER THAN TRUNCATES:
     This used to return the article's first ``max_passages`` sentences. News
@@ -383,16 +416,19 @@ def extract_passages(
 
     sentences = split_sentences(full_text)
     claim_words = _content_words(claim)
-    if claim_words:
-        # Sort by overlap, then by original position so ties keep article
-        # order and the lede still wins when nothing matches.
-        ranked = sorted(
-            enumerate(sentences),
-            key=lambda pair: (-len(claim_words & _content_words(pair[1])), pair[0]),
-        )
-        sentences = [sentence for _index, sentence in ranked]
+    order, lexical_hits = _lexical_order(sentences, claim_words)
 
-    for sentence in sentences:
+    ranking = "lexical"
+    dense = semantic_order(claim, sentences) if claim and sentences else None
+    if dense:
+        fused = reciprocal_rank_fusion(dense, lexical_hits)
+        nominated = set(fused)
+        order = fused + [i for i in order if i not in nominated]
+        ranking = "hybrid"
+    if ranking_info is not None:
+        ranking_info["ranking"] = ranking
+
+    for sentence in (sentences[i] for i in order):
         if len(passages) >= max_passages:
             break
         if is_boilerplate(sentence, claim_words):

@@ -4,5 +4,9 @@ python-dotenv
 numpy
 pandas
 transformers>=4.45,<5
+# Dense passage ranking (all-MiniLM-L6-v2). 5.1.x supports transformers<5.
+sentence-transformers>=5.1,<5.2
+# NLI-checked explanations (Gemini free tier).
+google-genai>=2.0
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.5.1+cpu

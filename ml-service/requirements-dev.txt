@@ -1,0 +1,4 @@
+# Test-only dependencies: pip install -r requirements-dev.txt
+-r requirements.txt
+pytest
+httpx  # FastAPI TestClient

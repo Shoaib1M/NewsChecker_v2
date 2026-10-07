@@ -46,9 +46,15 @@ from claim_recency import resolve_mode
 from claim_triage import triage_claim
 from claim_verifier import extract_claims
 from evidence_aggregator import assess_coverage, count_independent_groups
-from evidence_pipeline import run_pipeline, EvidenceResult as PipelineEvidenceResult
+import explainer
+from evidence_pipeline import (
+    run_pipeline,
+    passage_ranking_report,
+    EvidenceResult as PipelineEvidenceResult,
+)
 from knowledge_verifier import assess_claim
 from nli_service import get_nli_service
+from passage_retriever import get_passage_ranker
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -173,6 +179,18 @@ async def lifespan(app: FastAPI):
                 # guessing, and /api/health reports exactly why.
                 print(f"NLI unavailable ({state['status']}): {state['error']}")
 
+        # The passage embedder, for the same reason. Much smaller (~90 MB),
+        # but its first use would otherwise also be a download inside a
+        # request. Skipped entirely when SEMANTIC_PASSAGES is off.
+        ranker = get_passage_ranker()
+        if ranker.status["enabled"]:
+            print(f"Preloading passage embedding model ({ranker.model_name}) …")
+            state = ranker.warm_up()
+            if state["status"] != "ready":
+                # Not fatal either: passage selection falls back to lexical.
+                print(f"Dense passage ranking unavailable ({state['status']}): "
+                      f"{state['error']}")
+
     # Yield hands control back to FastAPI to start accepting requests
     yield
 
@@ -242,6 +260,10 @@ class RetrievalInfo(BaseModel):
     candidate_count: int = 0
     relevant_count: int = 0
     diagnostics: list[dict] = Field(default_factory=list)
+    # Dense passage ranking: the embedder's status (same shape as `nli`) plus
+    # how many classified documents it actually ranked. Empty when nothing
+    # was searched.
+    passage_ranking: dict = Field(default_factory=dict)
 
 
 class NLIInfo(BaseModel):
@@ -322,6 +344,29 @@ class CoverageMode(BaseModel):
     stale_evidence_count: int = 0     # found, but too old to be reporting it
 
 
+class ExplanationSentence(BaseModel):
+    """One sentence the LLM wrote, and what the faithfulness check made of it."""
+    text: str
+    citations: list[int] = Field(default_factory=list)   # 1-based top_evidence positions
+    kept: bool = False
+    entailment: float = 0.0                              # best NLI entailment vs. its cited source(s)
+    drop_reason: str = ""
+
+
+class ExplanationInfo(BaseModel):
+    """An LLM explanation of the verdict, filtered sentence by sentence by NLI.
+
+    Explains a verdict; never sets one. ``text`` holds only sentences whose
+    cited source entails them, and is empty whenever ``available`` is false.
+    """
+    available: bool = False
+    reason: str = "not generated"
+    text: str = ""
+    sentences: list[ExplanationSentence] = Field(default_factory=list)
+    dropped_count: int = 0
+    model: str = ""
+
+
 class CheckResponse(BaseModel):
     statement: str
     coverage: CoverageMode = Field(default_factory=CoverageMode)
@@ -350,6 +395,7 @@ class CheckResponse(BaseModel):
     reasoning: str = ""
     external_evidence_available: bool = False
     external_evidence_checked: bool = False
+    explanation: ExplanationInfo = Field(default_factory=ExplanationInfo)
 
 
 # ---------------------------------------------------------------------------
@@ -693,6 +739,8 @@ async def health():
         "input_size": _model.input_size if _model else None,
         "threshold": _model.best_threshold if _model else None,
         "nli": nli_svc.status,
+        "passage_ranking": get_passage_ranker().status,
+        "explanations": explainer.status(),
         "search_providers": providers,
     }
 
@@ -769,6 +817,8 @@ def check_statement(request: CheckRequest):
     candidate_count = 0
     relevant_count = 0
     searched = False
+    passage_documents = 0
+    hybrid_documents = 0
 
     if knowledge_assessment:
         status = knowledge_assessment["status"]
@@ -812,6 +862,9 @@ def check_statement(request: CheckRequest):
                 retrieval_status = _worst_retrieval_status(claim_statuses)
                 candidate_count += outcome.candidate_count
                 relevant_count += outcome.relevant_count
+                ranking = outcome.passage_ranking or {}
+                passage_documents += ranking.get("documents", 0)
+                hybrid_documents += ranking.get("hybrid_documents", 0)
         except Exception as err:
             print(f"Evidence pipeline failed: {err}")
             claim_summaries = [(
@@ -935,6 +988,24 @@ def check_statement(request: CheckRequest):
         )
     )
 
+    # --- 7. Explain the verdict (cannot change it) ---
+    # Runs last, after every verdict field above is final, and its result is
+    # only ever placed in `explanation`. It has its own short timeout outside
+    # EVIDENCE_BUDGET_SECONDS, and any failure is an abstention, never an
+    # error: a check never fails because its explanation did.
+    explanation = (
+        explainer.explain(
+            statement, ev_stance["status"], top_evidence,
+            claim_type=triage.claim_type,
+        )
+        if searched and not knowledge_assessment
+        else explainer.Explanation(
+            available=False,
+            reason="nothing was searched, so there is no evidence to explain",
+            model=explainer.explain_model(),
+        )
+    )
+
     elapsed = round(time.time() - start, 2)
 
     # --- 5. Build response ---
@@ -972,6 +1043,10 @@ def check_statement(request: CheckRequest):
             candidate_count=candidate_count,
             relevant_count=relevant_count,
             diagnostics=retrieval_diagnostics,
+            passage_ranking=(
+                passage_ranking_report(passage_documents, hybrid_documents)
+                if searched else {}
+            ),
         ),
         nli=NLIInfo(
             available=nli_svc.is_ready or nli_svc.is_available,
@@ -1022,6 +1097,7 @@ def check_statement(request: CheckRequest):
             for result in all_evidence
         ),
         external_evidence_checked=searched,
+        explanation=ExplanationInfo(**explanation.to_dict()),
     )
 
 

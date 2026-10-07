@@ -204,6 +204,17 @@ router.post("/", optionalAuth, async (req, res) => {
             candidateCount: result.retrieval.candidate_count,
             relevantCount: result.retrieval.relevant_count,
             diagnostics: result.retrieval.diagnostics,
+            passageRanking: result.retrieval.passage_ranking,
+          },
+          // Stored as generated: regenerating on replay could produce
+          // different, unchecked text.
+          explanation: result.explanation && {
+            available: result.explanation.available,
+            reason: result.explanation.reason,
+            text: result.explanation.text,
+            sentences: result.explanation.sentences,
+            droppedCount: result.explanation.dropped_count,
+            model: result.explanation.model,
           },
           nli: result.nli && {
             available: result.nli.available,

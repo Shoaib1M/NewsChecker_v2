@@ -36,6 +36,7 @@ from claim_recency import (
 from claim_verifier import classify_source, resolve_publisher_host
 from evidence_aggregator import ClassifiedEvidence, compute_stance
 from nli_service import get_nli_service
+from passage_retriever import get_passage_ranker
 from numeric_consistency import conflicting_quantity
 from providers import SearchResult
 from providers.registry import search_all_providers
@@ -79,6 +80,11 @@ class PipelineOutcome(NamedTuple):
     diagnostics: list[dict]
     candidate_count: int
     relevant_count: int
+    # How passages were chosen for NLI: the dense ranker's status plus how
+    # many documents were actually ranked hybrid. Reported like the provider
+    # diagnostics, because "the embedding model was down" and "it ran and
+    # changed nothing" look identical in the verdict and must not in the logs.
+    passage_ranking: dict | None = None
 
 
 # ── Singletons ───────────────────────────────────────────────────────
@@ -326,6 +332,7 @@ def run_pipeline(
 
     nli_service = get_nli_service()
     evidence_results: list[EvidenceResult] = []
+    hybrid_documents = 0
     # Documents that were about the claim but too old to be reporting it.
     # This is the difference between 'nobody reported this' and 'nobody
     # reported it THIS MONTH', and the absence verdict must not confuse them.
@@ -358,7 +365,12 @@ def run_pipeline(
         # The claim steers passage selection: NLI only sees what this
         # returns, so the sentences that mention the claim's subject matter
         # must not be crowded out by the article's opening paragraphs.
-        passages = extract_passages(title, snippet, full_text, claim=claim)
+        ranking_info: dict = {}
+        passages = extract_passages(
+            title, snippet, full_text, claim=claim, ranking_info=ranking_info,
+        )
+        if ranking_info.get("ranking") == "hybrid":
+            hybrid_documents += 1
         support_score = 0.0
         contradiction_score = 0.0
         best_sentence = ""
@@ -503,4 +515,18 @@ def run_pipeline(
         diagnostics=diagnostics_dicts,
         candidate_count=candidate_count,
         relevant_count=relevant_count,
+        passage_ranking=passage_ranking_report(len(selected), hybrid_documents),
     )
+
+
+def passage_ranking_report(documents: int = 0, hybrid_documents: int = 0) -> dict:
+    """The dense ranker's live status, plus what it did for this claim.
+
+    ``hybrid_documents < documents`` is normal: an article whose sentences are
+    all below the similarity floor falls back to lexical ranking by design.
+    """
+    return {
+        **get_passage_ranker().status,
+        "documents": documents,
+        "hybrid_documents": hybrid_documents,
+    }
