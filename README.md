@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🔎 NewsChecker v2
+#  NewsChecker v2
 
 ### Evidence-first fact-checking with hybrid retrieval, NLI verification and grounded explanations
 
