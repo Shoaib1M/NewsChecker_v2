@@ -47,10 +47,17 @@ not deployed; demos are recorded.
 
 ## Commands (PowerShell)
 
+Use `ml-service\.venv` for everything. System Python on this machine has a
+mismatched `torchvision` (`operator torchvision::nms does not exist`) that stops
+`transformers` loading any model, so real NLI cannot run there.
+
 ```powershell
-# ML service tests. System Python, not .venv: the venv has the runtime
-# deps but no pytest.
-cd ml-service; python -m pytest -q
+# One-time setup
+cd ml-service; python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+
+# ML service tests (no network, no model downloads — see tests/conftest.py)
+cd ml-service; .\.venv\Scripts\python.exe -m pytest -q
 
 # Server tests (no DB / network needed)
 cd server; npm test
@@ -58,16 +65,27 @@ cd server; npm test
 # Client
 cd client; npm run lint; npm run build
 
-# Run locally (three terminals)
-cd ml-service; python main.py   # :8000
-cd server; npm run dev          # :3001
-cd client; npm run dev          # :5173
+# Run everything for a demo and warm both models
+powershell -ExecutionPolicy Bypass -File .\scripts\demo_warmup.ps1
+
+# Or run locally by hand (three terminals)
+cd ml-service; .\.venv\Scripts\python.exe main.py   # :8000
+cd server; npm run dev                              # :3001
+cd client; npm run dev                              # :5173
 
 # Live checks (need network)
-cd ml-service; python check_providers.py
-cd ml-service; python news_benchmark.py --save run.json
-cd ml-service; python news_benchmark.py --from-file run.json
+cd ml-service; .\.venv\Scripts\python.exe check_providers.py
+powershell -ExecutionPolicy Bypass -File .\scriptsun_rag_benchmark.ps1 -Limit 10
 ```
+
+## Where things are
+
+- `ml-service/passage_retriever.py` — dense ranking + reciprocal rank fusion.
+  Wired into `article_extractor.extract_passages`.
+- `ml-service/explainer.py` — Gemini explanation + NLI faithfulness filter.
+  Called last in `main.check_statement`; writes only `explanation`.
+- `docs/CLAUDE_CODE_PROMPT.md` — the full task prompt and decisions made.
+- `docs/benchmarks/` — saved benchmark runs; `docs/DEMO.md` — demo script.
 
 ## Baseline (before the RAG upgrade, 2026-10-07)
 

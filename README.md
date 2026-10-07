@@ -298,7 +298,48 @@ against the verdict printed above it.
 
 ### Results
 
-BENCHMARK_RESULTS_PLACEHOLDER
+Measured with `news_benchmark.py` on **one fixed set of 17 cases** (10 real
+headlines from 2026-10-07 plus 7 corrupted versions), re-scored with
+`--from-file` so every row reads the same claims. Live search differs between
+runs, so each setting was run more than once where quota allowed; raw runs are
+in [`docs/benchmarks/`](docs/benchmarks/). Explanations were off (they cannot
+change a verdict). NLI model: `nli-deberta-v3-small` unless stated.
+
+| Setting | Runs | Wrong answers | Confirmation recall | Rejected corrupted | Abstention | Mean latency |
+|---|---|---|---|---|---|---|
+| Lexical only (baseline) | 3 | 4, 3, 3 of 17 — **19.6%** | 3, 4, 4 of 10 | 7, 7, 6 of 7 | 17.6–23.5% | 19.5 s |
+| Hybrid, floor 0.25 | 1 | 3 of 17 — 17.6% | 4 of 10 | 7 of 7 | 17.6% | 19.1 s |
+| **Hybrid, floor 0.30** | 2 | 3, 3 of 17 — **17.6%** | 4, 4 of 10 | 7, 7 of 7 | 17.6% | 21.7 s |
+| Hybrid, floor 0.40 | 1 | 4 of 17 — 23.5% | 4 of 10 | 7 of 7 | 11.8% | 19.4 s |
+| Hybrid 0.30 + aboutness gate | 2 | 3, 3 of 17 — 17.6% | 4, 4 of 10 | 7, 7 of 7 | 17.6% | 20.3 s |
+| Lexical, `MoritzLaurer` NLI | 1 | 3 of 17 — 17.6% | 4 of 10 | 6 of 7 | 23.5% | 19.5 s |
+| Hybrid + gate, `MoritzLaurer` NLI | 1 | 3 of 17 — 17.6% | 4 of 10 | 6 of 7 | 23.5% | 17.9 s |
+
+**Reading it honestly: no setting is measurably better on this benchmark.**
+The lexical baseline alone moves between 3 and 4 wrong answers across runs of
+identical claims, and every difference above is inside that spread. Per claim,
+hybrid and lexical gave the same verdict on 16 of 17 cases in a paired run;
+the one difference was a case where the lexical run's search failed.
+`SEMANTIC_MIN_SIMILARITY` stays at **0.30**: tied best on wrong answers with
+0.25, with two runs behind it, and between the neighbours.
+
+**What the benchmark did find** is where the wrong answers come from, and it
+was not passage selection. Inspecting each one led to two real defects, both
+fixed: off-topic documents were contradicting claims at full weight (→ the
+aboutness gate), and the NLI checkpoint in use scores unrelated text as
+contradiction (→ the recommended model, accuracy **0.61 → 0.91** on the
+labelled stance corpus). That corpus improvement did not move the live
+benchmark: per claim the new model fixed two wrong answers and introduced two.
+Seventeen claims cannot resolve a difference of that size.
+
+One run was discarded and is kept as
+`INVALID_hybrid030_run2_search_outage.json`: providers were rate-limited, 15
+of 17 searches returned nothing, and it scored a misleading "0% wrong". The
+benchmark now records retrieval status per case and flags such runs.
+
+**Cost of hybrid retrieval**, measured on a real claim with the model warm:
+~2.0 s of embedding across 8 articles (107 sentences) — about 5% of a 42 s
+check. It changed which passages NLI read for 5 of 8 articles.
 
 ### Limitations of this layer
 
@@ -636,7 +677,7 @@ The first evidence check (a non-deterministic claim) triggers the NLI model down
 ## Testing
 
 ```bash
-# ML service — 508 tests (pytest + httpx: pip install -r requirements-dev.txt)
+# ML service — 517 tests (pytest + httpx: pip install -r requirements-dev.txt)
 # covering claim normalisation and triage, claim
 # decomposition, coverage modes and article dating, relevance and action
 # filtering, query generation, numeric-consistency and boilerplate guards,
@@ -913,7 +954,7 @@ newschecker/
 │   ├── tfidf.py                    From-scratch TF-IDF vectorizer (feeds the legacy MLP only)
 │   ├── classifier.py / mlp_classifier.py   Experimental baselines, offline evaluation only
 │   ├── evaluate_models.py / evaluate_production_model.py   Offline evaluation scripts
-│   └── tests/                      508 tests across the modules above, incl.
+│   └── tests/                      517 tests across the modules above, incl.
 │                                    test_claim_edge_cases.py (end-to-end verdicts)
 ├── docs/screenshots/              README images
 ├── docs/benchmarks/               Saved news_benchmark runs (hybrid vs lexical)

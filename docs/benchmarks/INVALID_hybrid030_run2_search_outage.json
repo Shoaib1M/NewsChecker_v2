@@ -1,0 +1,196 @@
+{
+  "summary": {
+    "reported": {
+      "n": 10,
+      "correct": 1,
+      "missed": 9,
+      "wrong": 0
+    },
+    "corrupted": {
+      "n": 7,
+      "correct": 1,
+      "missed": 6,
+      "wrong": 0
+    },
+    "total": 17,
+    "wrong_answers": 0,
+    "wrong_answer_rate": 0.0,
+    "confirmation_recall": 0.1,
+    "abstention_rate": 0.8823529411764706,
+    "mean_seconds": 3.3941176470588235
+  },
+  "mode": "recent",
+  "seed": 0,
+  "cases": [
+    {
+      "claim": "Breaking news: Christa Pike, who survived a botched execution attempt last week in Tennessee, is now conscious and speaking, her attorneys said. Pike, 50, had been sentenced to death decades earlier for her role in killing Colleen Slemmer in 1995. https://",
+      "truth": "reported",
+      "origin": "Breaking news: Christa Pike, who survived a botched execution attempt last week in Tennessee, is now conscious and speaking, her attorneys said. Pike, 50, had been sentenced to death decades earlier for her role in killing Colleen Slemmer in 1995. https://",
+      "corruption": "",
+      "status": "supported",
+      "verdict": "evidence supports the claim",
+      "outcome": "correct",
+      "seconds": 17.9
+    },
+    {
+      "claim": "Breaking news: Christa Pike, who survived a botched execution attempt last week in Tennessee, is not now conscious and speaking, her attorneys said. Pike, 50, had been sentenced to death decades earlier for her role in killing Colleen Slemmer in 1995. https://",
+      "truth": "corrupted",
+      "origin": "Breaking news: Christa Pike, who survived a botched execution attempt last week in Tennessee, is now conscious and speaking, her attorneys said. Pike, 50, had been sentenced to death decades earlier for her role in killing Colleen Slemmer in 1995. https://",
+      "corruption": "negate",
+      "status": "contradicted",
+      "verdict": "evidence contradicts the claim",
+      "outcome": "correct",
+      "seconds": 18.9
+    },
+    {
+      "claim": "Cristiano Ronaldo accuses Portugal coach of breaking his word in explosive 1,740-word statement",
+      "truth": "reported",
+      "origin": "Cristiano Ronaldo accuses Portugal coach of breaking his word in explosive 1,740-word statement",
+      "corruption": "",
+      "status": "insufficient_evidence",
+      "verdict": "insufficient evidence",
+      "outcome": "missed",
+      "seconds": 1.0
+    },
+    {
+      "claim": "Cristiano Ronaldo accuses Portugal coach of breaking his word in explosive 12,180-word statement",
+      "truth": "corrupted",
+      "origin": "Cristiano Ronaldo accuses Portugal coach of breaking his word in explosive 1,740-word statement",
+      "corruption": "number",
+      "status": "insufficient_evidence",
+      "verdict": "insufficient evidence",
+      "outcome": "missed",
+      "seconds": 1.0
+    },
+    {
+      "claim": "NFL Week 5 latest intel, buzz questions, news, fantasy tips: What we're hearing",
+      "truth": "reported",
+      "origin": "NFL Week 5 latest intel, buzz questions, news, fantasy tips: What we're hearing",
+      "corruption": "",
+      "status": "insufficient_evidence",
+      "verdict": "insufficient evidence",
+      "outcome": "missed",
+      "seconds": 1.0
+    },
+    {
+      "claim": "NFL Week 35 latest intel, buzz questions, news, fantasy tips: What we're hearing",
+      "truth": "corrupted",
+      "origin": "NFL Week 5 latest intel, buzz questions, news, fantasy tips: What we're hearing",
+      "corruption": "number",
+      "status": "insufficient_evidence",
+      "verdict": "insufficient evidence",
+      "outcome": "missed",
+      "seconds": 1.0
+    },
+    {
+      "claim": "Tropical Storm Isaias forms; forecast to strengthen over next few days",
+      "truth": "reported",
+      "origin": "Tropical Storm Isaias forms; forecast to strengthen over next few days",
+      "corruption": "",
+      "status": "insufficient_evidence",
+      "verdict": "insufficient evidence",
+      "outcome": "missed",
+      "seconds": 2.0
+    },
+    {
+      "claim": "Paralysed dad regaining movement after breaking neck while diving",
+      "truth": "reported",
+      "origin": "Paralysed dad regaining movement after breaking neck while diving",
+      "corruption": "",
+      "status": "insufficient_evidence",
+      "verdict": "insufficient evidence",
+      "outcome": "missed",
+      "seconds": 1.0
+    },
+    {
+      "claim": "NEWS CENTER Maine Morning Report at 6",
+      "truth": "reported",
+      "origin": "NEWS CENTER Maine Morning Report at 6",
+      "corruption": "",
+      "status": "insufficient_evidence",
+      "verdict": "insufficient evidence",
+      "outcome": "missed",
+      "seconds": 1.0
+    },
+    {
+      "claim": "NEWS CENTER Maine Morning Report at 42",
+      "truth": "corrupted",
+      "origin": "NEWS CENTER Maine Morning Report at 6",
+      "corruption": "number",
+      "status": "insufficient_evidence",
+      "verdict": "insufficient evidence",
+      "outcome": "missed",
+      "seconds": 1.0
+    },
+    {
+      "claim": "Zendaya, Tom Holland are married, stylist claims: A relationship timeline",
+      "truth": "reported",
+      "origin": "Zendaya, Tom Holland are married, stylist claims: A relationship timeline",
+      "corruption": "",
+      "status": "insufficient_evidence",
+      "verdict": "insufficient evidence",
+      "outcome": "missed",
+      "seconds": 1.0
+    },
+    {
+      "claim": "Zendaya, Tom Holland are not married, stylist claims: A relationship timeline",
+      "truth": "corrupted",
+      "origin": "Zendaya, Tom Holland are married, stylist claims: A relationship timeline",
+      "corruption": "negate",
+      "status": "insufficient_evidence",
+      "verdict": "insufficient evidence",
+      "outcome": "missed",
+      "seconds": 1.0
+    },
+    {
+      "claim": "Christa Pike is awake and speaking after failed execution, lawyers say",
+      "truth": "reported",
+      "origin": "Christa Pike is awake and speaking after failed execution, lawyers say",
+      "corruption": "",
+      "status": "insufficient_evidence",
+      "verdict": "insufficient evidence",
+      "outcome": "missed",
+      "seconds": 1.0
+    },
+    {
+      "claim": "Christa Pike is not awake and speaking after failed execution, lawyers say",
+      "truth": "corrupted",
+      "origin": "Christa Pike is awake and speaking after failed execution, lawyers say",
+      "corruption": "negate",
+      "status": "insufficient_evidence",
+      "verdict": "insufficient evidence",
+      "outcome": "missed",
+      "seconds": 1.0
+    },
+    {
+      "claim": "Morning crash shuts down Route 209",
+      "truth": "reported",
+      "origin": "Morning crash shuts down Route 209",
+      "corruption": "",
+      "status": "insufficient_evidence",
+      "verdict": "insufficient evidence",
+      "outcome": "missed",
+      "seconds": 1.0
+    },
+    {
+      "claim": "Morning crash did not shut down Route 209",
+      "truth": "corrupted",
+      "origin": "Morning crash shuts down Route 209",
+      "corruption": "negate",
+      "status": "insufficient_evidence",
+      "verdict": "insufficient evidence",
+      "outcome": "missed",
+      "seconds": 1.0
+    },
+    {
+      "claim": "Prosecutor says man charged in killing of British ex-politician tried to break into Farage's home",
+      "truth": "reported",
+      "origin": "Prosecutor says man charged in killing of British ex-politician tried to break into Farage's home",
+      "corruption": "",
+      "status": "insufficient_evidence",
+      "verdict": "insufficient evidence",
+      "outcome": "missed",
+      "seconds": 5.9
+    }
+  ]
+}
