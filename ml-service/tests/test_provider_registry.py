@@ -40,6 +40,16 @@ class DeduplicateTests(unittest.TestCase):
 
 
 class SearchAllProvidersTests(unittest.TestCase):
+    def setUp(self):
+        # These tests predate the keyless providers. Patching PROVIDERS alone
+        # left Google News and Wikipedia enabled by default, so every test in
+        # this class sent real queries to the live internet — and, online,
+        # their real results were counted against assertions written for one
+        # fake provider. Offline they "passed" because the live calls failed.
+        patcher = patch.object(registry, "KEYLESS_PROVIDERS", [])
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_provider_exception_becomes_failed_diagnostic_not_silent_empty(self):
         """A provider that raises must surface as status='failed' with the
         error recorded — never collapse into an indistinguishable empty

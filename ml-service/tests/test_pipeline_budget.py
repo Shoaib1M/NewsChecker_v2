@@ -33,7 +33,24 @@ def _hanging_urlopen(request, timeout=10, **kwargs):
     raise TimeoutError("simulated network hang")
 
 
+def _without_keyless_providers(test_case):
+    """Take Google News and Wikipedia out of the search for one test.
+
+    These tests simulate a blocked network by hanging DuckDuckGo and article
+    fetches. They predate the keyless providers, which stayed enabled and
+    went to the LIVE internet — so "a totally blocked search" was only
+    blocked when the network happened to be slow, and the outcome flipped
+    between SEARCH_FAILED and SEARCH_PARTIAL from run to run.
+    """
+    patcher = patch.object(registry, "KEYLESS_PROVIDERS", [])
+    patcher.start()
+    test_case.addCleanup(patcher.stop)
+
+
 class PipelineBudgetTests(unittest.TestCase):
+    def setUp(self):
+        _without_keyless_providers(self)
+
     def test_blocked_search_returns_within_budget(self):
         """A totally blocked search provider must not outlive the budget."""
         budget = 3.0
@@ -99,6 +116,9 @@ class PipelineBudgetTests(unittest.TestCase):
 
 
 class MultiClaimBudgetTests(unittest.TestCase):
+    def setUp(self):
+        _without_keyless_providers(self)
+
     def test_multi_claim_statement_shares_one_budget(self):
         """Three claims must share one budget, not take three budgets.
 
