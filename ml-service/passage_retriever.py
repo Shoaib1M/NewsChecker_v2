@@ -206,6 +206,44 @@ class PassageRanker:
                 print(f"Passage embedding model failed to load: {self._failed_error}")
 
     # ── Ranking ──────────────────────────────────────────────────────
+    def similarities(
+        self, claim: str, texts: Sequence[str]
+    ) -> list[float] | None:
+        """Cosine similarity of each text to ``claim``; None when unavailable.
+
+        Same degradation contract as ``semantic_order``: disabled, unloadable
+        or failing ⇒ None, and the caller behaves as if this did not exist.
+        Empty texts score 0.0 without being embedded.
+        """
+        if not semantic_passages_enabled():
+            return None
+        texts = list(texts)
+        if not claim or not claim.strip() or not texts:
+            return [0.0 for _ in texts]
+        self._ensure_loaded()
+        if self._model is None:
+            return None
+        present = [i for i, t in enumerate(texts) if t and t.strip()]
+        scores = [0.0 for _ in texts]
+        if not present:
+            return scores
+        try:
+            vectors = self._model.encode(
+                [claim, *(texts[i] for i in present)],
+                normalize_embeddings=True,
+                convert_to_numpy=True,
+                show_progress_bar=False,
+                batch_size=32,
+            )
+        except Exception as exc:  # noqa: BLE001
+            self._last_encode_error = str(exc) or exc.__class__.__name__
+            print(f"Passage embedding failed: {exc}")
+            return None
+        self._last_encode_error = None
+        for slot, index in enumerate(present, start=1):
+            scores[index] = float(vectors[slot] @ vectors[0])
+        return scores
+
     def semantic_order(
         self, claim: str, sentences: Sequence[str]
     ) -> list[int] | None:
@@ -261,6 +299,19 @@ class PassageRanker:
             key=lambda index: (-float(similarities[index]), index),
         )
         return ranked
+
+
+def claim_similarity(claim: str, texts: Sequence[str]) -> list[float] | None:
+    """Cosine similarity of each text to the claim, or None if unavailable.
+
+    Used by the evidence pipeline's aboutness check: NLI scores a pair of
+    sentences, not whether they concern the same event, and small NLI models
+    report strong "contradiction" for pairs that are merely unrelated. This
+    answers the question NLI cannot — is this document about the claim at
+    all? — using the same model and the same floor as passage ranking, so
+    "related to the claim" means one thing throughout.
+    """
+    return get_passage_ranker().similarities(claim, texts)
 
 
 def semantic_order(claim: str, sentences: Sequence[str]) -> list[int] | None:

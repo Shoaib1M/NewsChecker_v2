@@ -36,7 +36,7 @@ from claim_recency import (
 from claim_verifier import classify_source, resolve_publisher_host
 from evidence_aggregator import ClassifiedEvidence, compute_stance
 from nli_service import get_nli_service
-from passage_retriever import get_passage_ranker
+from passage_retriever import claim_similarity, get_passage_ranker, min_similarity
 from numeric_consistency import conflicting_quantity
 from providers import SearchResult
 from providers.registry import search_all_providers
@@ -184,6 +184,19 @@ _CLAIM_REPORTING_FRAME = re.compile(
     r"|\bclaims?\s+(?:that\s+)?(?:have|has)\s+(?:been\s+)?circulat",
     re.IGNORECASE,
 )
+
+
+def _not_about_claim(claim: str, *texts: str) -> float | None:
+    """Best similarity to the claim if the document is NOT about it, else None.
+
+    None also when dense ranking is unavailable — no model, no gate, exactly
+    the behaviour before it existed.
+    """
+    scores = claim_similarity(claim, texts)
+    if scores is None:
+        return None
+    best = max(scores, default=0.0)
+    return best if best < min_similarity() else None
 
 
 def _select_for_classification(included: list[dict], max_results: int) -> list[dict]:
@@ -434,6 +447,30 @@ def run_pipeline(
                 stance = "unclear"
                 stance_note = (
                     f"states {stated.text} where the claim says {claimed.text}"
+                )
+
+        # A document that is not ABOUT the claim cannot take a side on it.
+        # NLI scores two sentences, not whether they concern the same event,
+        # and small NLI models report near-certain "contradiction" for pairs
+        # that are merely unrelated. Measured on 2026-10-07: for "Morning
+        # crash shuts down Route 209", weak queries ("Route shuts") let a
+        # Guardian walking guide through relevance filtering, NLI scored a
+        # sentence of it at 1.00 contradiction, and at reporting-tier weight
+        # it outvoted the local news confirming the crash. The same thing
+        # happened to the claim's negation, so both were "contradicted".
+        #
+        # Aboutness is semantic similarity — the same model and floor that
+        # rank passages — taken as the best of title, snippet and the
+        # decisive passage, so a fact-check whose refuting sentence is terse
+        # ("This is false.") still counts through its headline. Like the
+        # checks below, this only WITHDRAWS a position: it never turns one
+        # into the other. With dense ranking unavailable it does nothing.
+        if stance in {"supports", "contradicts"}:
+            unrelated = _not_about_claim(claim, title, snippet, best_sentence)
+            if unrelated is not None:
+                stance = "unclear"
+                stance_note = (
+                    f"is not about the claim (similarity {unrelated:.2f})"
                 )
 
         # Entailment has no clock. "India's prime minister resigned on Tuesday"

@@ -247,6 +247,16 @@ class TestPassageRanker(unittest.TestCase):
         self.assertEqual(ranker.semantic_order("claim", ["a"]), [0])
         self.assertIsNone(ranker.status["error"])
 
+    def test_similarities_are_cosines_and_skip_empty_texts(self):
+        ranker, embedder = _ranker({"a": 0.8, "b": 0.1})
+        scores = ranker.similarities("claim", ["a", "", "b"])
+        self.assertAlmostEqual(scores[0], 0.8, places=5)
+        self.assertEqual(scores[1], 0.0)
+        self.assertAlmostEqual(scores[2], 0.1, places=5)
+        self.assertEqual(embedder.calls[0], ["claim", "a", "b"])
+        with patch.dict(os.environ, {"SEMANTIC_PASSAGES": "false"}):
+            self.assertIsNone(ranker.similarities("claim", ["a"]))
+
     def test_empty_claim_or_sentences(self):
         ranker, embedder = _ranker()
         self.assertEqual(ranker.semantic_order("", ["a"]), [])
