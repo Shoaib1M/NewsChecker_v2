@@ -97,6 +97,27 @@ def _normalise_label(label: str, model_name: str) -> str:
     )
 
 
+# ── Model loading ────────────────────────────────────────────────────
+def _hf_pipeline():
+    """``transformers.pipeline``, imported lazily (and replaceable in tests)."""
+    from transformers import pipeline
+    return pipeline
+
+
+def _cpu_pipeline(task: str, **kwargs):
+    """The real Hugging Face pipeline, always in float32.
+
+    The pipeline otherwise honours the checkpoint's own ``torch_dtype``, and
+    some checkpoints ship "float16" — MoritzLaurer/DeBERTa-v3-base-mnli-fever-
+    anli does. Half precision on a CPU has no fast kernels: one 19-token pair
+    took 13.7 s instead of 0.18 s, eight pairs 153 s instead of 1.5 s, and
+    every check ran silently past the proxy timeout. This service only ever
+    runs on CPU, so float32 is always right.
+    """
+    import torch
+    return _hf_pipeline()(task, dtype=torch.float32, **kwargs)
+
+
 # ── Core service ─────────────────────────────────────────────────────
 class NLIService:
     """Lazy-loaded, thread-safe NLI scorer with observable status.
@@ -196,11 +217,7 @@ class NLIService:
 
             self._status = self.LOADING
             try:
-                factory = self._pipeline_factory
-                if factory is None:
-                    from transformers import pipeline as hf_pipeline
-                    factory = hf_pipeline
-
+                factory = self._pipeline_factory or _cpu_pipeline
                 self._pipeline = factory(
                     "text-classification",
                     model=self.model_name,

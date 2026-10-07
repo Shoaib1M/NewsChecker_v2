@@ -23,6 +23,25 @@ Hard rules live in the repo-root `CLAUDE.md` and are not repeated in full here.
   pipeline outcome (`/api/check` → `retrieval.passage_ranking`) and
   `/api/health`.
 
+### Decided later the same day
+
+- `gemini-3.8-flash` returned 503 "high demand" all day, so
+  `EXPLAIN_FALLBACK_MODELS` (default `gemini-3.5-flash-lite`) is tried when the
+  primary fails. The response records which model actually wrote the text.
+  Gemini refuses request deadlines under 10 s; the default timeout is 10 s.
+- Benchmark findings: hybrid retrieval is a **null result** on wrong-answer
+  rate (within run-to-run spread). Most wrong answers came from the NLI model,
+  not passage selection: `nli-deberta-v3-small` scores unrelated pairs as
+  1.00 contradiction.
+- Added an **aboutness gate** (`evidence_pipeline._not_about_claim`): a
+  document below `SEMANTIC_MIN_SIMILARITY` on title, snippet and decisive
+  passage cannot support or contradict. Only active when dense ranking is.
+- User approved switching `NLI_MODEL` (in `.env` / `.env.example`, not the
+  code default) to `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli`:
+  stance_sweep accuracy 0.61 → 0.91, invented positions 6 → 2 of 23.
+- The GNews / NewsAPI free daily quotas were exhausted by benchmarking. Do
+  not run the benchmark on demo day.
+
 ## Phase 1 — hybrid passage retrieval
 
 - `ml-service/passage_retriever.py`

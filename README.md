@@ -4,6 +4,8 @@
 
 This is a full-stack, three-service application: a React frontend, a Node/Express API gateway, and a Python/FastAPI ML service that owns claim understanding, retrieval, and NLI verification.
 
+**🎬 Demo video:** _link coming soon_ <!-- replace with the recording URL -->
+
 <p align="center">
   <img src="docs/screenshots/01-home.png" alt="NewsChecker home page" width="800">
 </p>
@@ -16,6 +18,7 @@ This is a full-stack, three-service application: a React frontend, a Node/Expres
 - [Screenshots](#screenshots)
 - [Architecture](#architecture)
 - [Design principles](#design-principles)
+- [Hybrid retrieval & grounded explanations](#hybrid-retrieval--grounded-explanations)
 - [Tech stack](#tech-stack)
 - [API reference](#api-reference)
   - [`POST /api/check` response schema](#post-apicheck-response-schema)
@@ -43,9 +46,10 @@ Type a claim like *"The US Federal Reserve raised interest rates by 0.25% in its
 3. **Applies a deterministic check**, for claims with an unambiguous, well-known answer (basic arithmetic, textbook science/geometry facts, a small set of verified historical facts) — no web search needed, no ambiguity.
 4. Otherwise, **generates multiple targeted search queries** (exact headline, proposition, entity-pair, contradiction/verification queries) and **retrieves candidates** from several providers. Google News RSS and Wikipedia need no API key and are on by default; GNews, The Guardian and NewsAPI join in when their keys are configured.
 5. **Filters for relevance** using entity, **action**, predicate, coherence and specificity scoring. Sharing a keyword with the claim — a number, an entity name — is not relevance; neither is being about the right subjects while never mentioning the event the claim asserts.
-6. **Runs NLI** (natural language inference) on the surviving candidates' passages against the claim, classifying each as entailment (supports), contradiction, or neutral.
+6. **Runs NLI** (natural language inference) on the surviving candidates' passages against the claim, classifying each as entailment (supports), contradiction, or neutral. Which passages NLI reads is decided by **hybrid retrieval** — sentence embeddings fused with word overlap — so a debunk written in its own words is not skipped.
 7. **Aggregates evidence** — weighting by source tier (primary/fact-check/reporting/reference/unclassified) and counting independent *publisher* domains, so five articles from one outlet don't outweigh one from another.
 8. **Returns a verdict** with a categorical confidence (not a fake-precision percentage) and the actual evidence used — explicitly distinguishing sources that were *found* from sources that were *verified*, and sources that address the claim from sources that merely cover the topic.
+9. **Explains the verdict** in two to four cited sentences written by an LLM (Gemini Flash) — *after* the verdict is final, and only with sentences the NLI model confirms are entailed by the source they cite. The LLM never decides or changes anything. See [Hybrid retrieval & grounded explanations](#hybrid-retrieval--grounded-explanations).
 
 ### The verdicts it can return
 
@@ -110,12 +114,15 @@ flowchart LR
     subgraph ML["ml-service/ — Python + FastAPI"]
         Pipeline["Triage → claim decomposition →<br/>retrieval → relevance →<br/>NLI → aggregation"]
         NLIModel["NLI cross-encoder<br/>(transformers, CPU)"]
+        Embedder["Passage embedder<br/>all-MiniLM-L6-v2 (CPU)"]
+        Explainer["Explainer<br/>LLM text, NLI-filtered"]
         Legacy["Legacy Binary MLP<br/>(auxiliary signal only)"]
     end
     subgraph External["External services"]
         Mongo[(MongoDB Atlas)]
         Google[Google OAuth]
         News["Search providers:<br/>Google News RSS · Wikipedia (keyless)<br/>GNews · Guardian · NewsAPI (keyed)<br/>DuckDuckGo (fallback)"]
+        Gemini["Gemini Flash API<br/>(free tier, optional)"]
     end
 
     UI -->|"POST /api/check"| Proxy
@@ -126,8 +133,12 @@ flowchart LR
     Proxy -->|"POST /api/check"| Pipeline
     Proxy -->|save result| Mongo
     Pipeline --> NLIModel
+    Pipeline --> Embedder
     Pipeline --> Legacy
     Pipeline --> News
+    Pipeline -->|"final verdict + evidence"| Explainer
+    Explainer --> Gemini
+    Explainer -->|"check every sentence"| NLIModel
 ```
 
 The evidence pipeline itself, inside `ml-service/`:
@@ -143,11 +154,13 @@ flowchart TD
     D --> E["providers/registry.py<br/>Google News · Wikipedia · GNews ·<br/>Guardian · NewsAPI · DuckDuckGo<br/>+ per-provider diagnostics"]
     E --> F["relevance_filter.py<br/>entity · action · predicate ·<br/>coherence · specificity scoring<br/>SEARCH_CANDIDATE → RELEVANT_SOURCE"]
     F --> G["article_extractor.py<br/>full-text + passage extraction"]
-    G --> H["nli_service.py<br/>entailment / contradiction / neutral<br/>RELEVANT_SOURCE → CLASSIFIED_EVIDENCE"]
+    G --> G2["passage_retriever.py<br/>dense (MiniLM) + lexical ranking<br/>reciprocal rank fusion → top passages"]
+    G2 --> H["nli_service.py<br/>entailment / contradiction / neutral<br/>RELEVANT_SOURCE → CLASSIFIED_EVIDENCE"]
     H --> I["evidence_aggregator.py<br/>source-tier weighting +<br/>independent-publisher clustering"]
     I --> K{"assess_coverage<br/>search ran, nothing supports it,<br/>high salience, not negated, NLI up?"}
     K -->|yes| L["no credible source reports this"]
     K -->|no| J[Verdict + confidence + evidence list]
+    J --> X["explainer.py — display only<br/>Gemini writes 2–4 cited sentences<br/>→ NLI keeps only entailed ones<br/>(runs after the verdict; cannot change it)"]
 ```
 
 ### Worked example: a viral false claim
@@ -211,7 +224,98 @@ These are the non-negotiable rules the codebase is built around — they were th
 - **"Mixed" means genuinely contested, not merely two-sided.** A direction wins outright when its weighted mass is at least `DOMINANCE_RATIO` (2×) the other side's. On raw counts, one 0.40 contradiction from an unclassified blog was filed as equal to five strong reports from reputable outlets.
 - **Repeated coverage from one outlet isn't independent confirmation.** `evidence_aggregator` counts distinct **publisher** domains per direction (`independent_supporting` / `independent_contradicting`), and **confidence is scaled by those, not by article count** — four copies of one wire story under one masthead are one confirmation, and used to earn "high" confidence. Aggregator links are resolved to the real publisher first (`claim_verifier.resolve_publisher_host`) — counting by URL host would have filed ten different newsrooms reached through Google News as a single origin, and tiered every one of them as "unclassified".
 - **Show what was actually searched.** The response has always carried per-provider diagnostics and nothing displayed them, so a thin result was indistinguishable from a misconfigured one — and a provider that never ran is the most common reason results look wrong. The result panel now has a collapsible *How this was checked*, listing each provider, its worst outcome across queries, and how many results it contributed.
+- **An LLM explains; it never decides.** The explanation is generated after every verdict field is final, its output is written only to `explanation`, and nothing reads it back — pinned by a test in which the LLM argues the opposite verdict and every verdict field stays byte-identical. Each sentence it writes must cite a source, and survives only if the NLI model finds that source entails it; if NLI is down, there is no explanation at all rather than an unchecked one.
+- **A document that is not about the claim cannot take a side on it.** NLI scores two sentences, not whether they concern the same event, and SNLI-trained NLI models file unrelated pairs as contradictions. When dense ranking is available, a document whose title, snippet and decisive passage all fall below `SEMANTIC_MIN_SIMILARITY` to the claim has its stance withdrawn to *unclear*, with a note on its card. Like the numeric and staleness checks, this only withdraws a position — it never converts one into the other. Found live: a Guardian walking guide, matched on "Route" and "shuts", was deciding the verdict on a car crash.
 - **Confidence is categorical, not fake-precision.** The UI shows `low` / `medium` / `high` / `very high`, not a `73.42%` number implying a calibration that doesn't exist. Where a percentage bar *is* shown (evidence-balance visualization), it reads "—" / "Not available" instead of a misleading number when there's no classified evidence to measure.
+
+## Hybrid retrieval & grounded explanations
+
+Two retrieval-augmented additions, both built so that turning them off — or
+losing the model or API they depend on — leaves the system exactly as it was.
+
+### 1. Hybrid passage retrieval
+
+**What.** NLI only reads up to eight passages per article, chosen by
+`article_extractor.extract_passages`. That choice is now made by two rankers
+merged with **reciprocal rank fusion**:
+
+- **lexical** — content-word overlap with the claim (the original ranking);
+- **dense** — cosine similarity between `all-MiniLM-L6-v2` sentence
+  embeddings of the claim and each sentence (`passage_retriever.py`), keeping
+  only sentences above `SEMANTIC_MIN_SIMILARITY`.
+
+Each sentence scores `Σ 1/(60 + rank)` over the lists it appears in; ties keep
+article order. Sentences neither ranker nominates follow in the old order.
+
+**Why.** Overlap cannot see a paraphrase, and debunks are paraphrases.
+*"Washington has not prohibited the search giant anywhere in the country"*
+shares no word with *"The United States banned Google across all its
+cities"* — so it scored zero and lost its slot to any sentence mentioning
+Google, and the article was filed as neutral. Fusion rather than replacement
+because exact matches on names and numbers are the strongest relevance signal
+there is, and embeddings blur them ("0.25%" and "0.75%" embed almost
+identically). RRF needs no weight between the two: cosine similarities and
+word counts are never put on one scale.
+
+**Why no vector database.** Each check embeds a few hundred freshly fetched
+sentences that will never be queried again; an index would cost more than it
+saves. Embeddings live in memory for one request.
+
+**Cost.** Measured on a real claim with the model warm: **~2.0 s of dense
+ranking across 8 articles (107 sentences), ≈5% of a 42 s check** — the rest is
+network. On that claim, hybrid ranking changed which passages NLI read for
+**5 of 8** articles.
+
+### 2. NLI-checked explanations
+
+**What.** After the verdict is final, Gemini Flash writes 2–4 sentences
+explaining why the classified evidence leads to it, citing each source as
+`[n]`. Then `explainer.py` checks every sentence:
+
+1. no citation, or a citation to a source it was not given → **dropped**;
+2. `nli.score_many(sentence, [cited source text])` — the source is the
+   premise, the sentence the hypothesis;
+3. kept only if `decide_stance` — the same rule that classifies evidence —
+   would call that "supports".
+
+Only kept sentences are shown, each `[n]` linking to its evidence card. If NLI
+is unavailable there is no explanation at all.
+
+**Why the filter.** "Use only the evidence" in a prompt lowers the rate of
+invented facts; it does not make it zero. The filter turns *the LLM was asked
+to be faithful* into *every displayed sentence is entailed by the source it
+cites, according to a model with different failure modes*.
+
+**Why it cannot change the verdict.** It runs last, writes only
+`explanation`, and nothing reads that back. `tests/test_explainer.py` runs the
+full API with an LLM instructed to argue the opposite verdict and asserts that
+every verdict field is identical with explanations on and off.
+
+**Which evidence it sees.** Only classified sources on the verdict's side
+(both sides for `mixed`). A rumour post quoted on a `contradicted` verdict would
+pass the filter — it is faithful to its source — and still read as an argument
+against the verdict printed above it.
+
+### Results
+
+BENCHMARK_RESULTS_PLACEHOLDER
+
+### Limitations of this layer
+
+- **The benchmark is small and live.** Headlines change daily and search
+  results change between runs, so differences smaller than the run-to-run
+  spread above are noise, not findings.
+- **NLI entailment is not truth.** The filter guarantees a sentence follows
+  from its cited passage, not that the passage is right; that is what the
+  source tiering and the verdict rules are for.
+- **The filter is strict.** A correct sentence that combines two sources
+  awkwardly, or adds a harmless connective, can be dropped. That is the
+  intended trade: a missing sentence is a shortfall, an unsupported one is a
+  failure.
+- **Free-tier Gemini is unreliable under load** (503 "high demand"); hence
+  `EXPLAIN_FALLBACK_MODELS`. When every model fails, the check still
+  completes — without an explanation.
+- **English only**, like the rest of the pipeline; MiniLM is an English model.
 
 ## Tech stack
 
@@ -271,7 +375,14 @@ This is the actual `CheckResponse` shape from `ml-service/main.py`, proxied unch
     "relevant_count": 6,             // survived relevance filtering (still NOT yet "evidence")
     "diagnostics": [                 // per-provider, per-query outcome — never silently swallowed
       { "provider": "gnews", "query": "...", "enabled": true, "status": "success", "raw_result_count": 4, "normalized_result_count": 3, "error": null }
-    ]
+    ],
+    "passage_ranking": {             // how passages were chosen for NLI ({} when nothing was searched)
+      "enabled": true, "model": "sentence-transformers/all-MiniLM-L6-v2",
+      "status": "ready",             // "disabled" | "loading" | "ready" | "failed" — failed ⇒ lexical ranking only
+      "error": null,
+      "documents": 8,                // classified documents
+      "hybrid_documents": 8          // of those, ranked with dense + lexical fusion
+    }
   },
 
   // NLI model state and how much evidence it actually classified.
@@ -321,9 +432,23 @@ This is the actual `CheckResponse` shape from `ml-service/main.py`, proxied unch
   "processing_time_seconds": 4.1,
   "reasoning": "Searched 12 sources across the configured news, reference and web providers; 3 discussed this claim and 3 were compared against it by the NLI model. 3 classified sources from 3 independent publishers support this claim.",
   "external_evidence_available": true,
-  "external_evidence_checked": true   // false ⇒ nothing was searched (deterministic check, or not a checkable claim)
+  "external_evidence_checked": true,  // false ⇒ nothing was searched (deterministic check, or not a checkable claim)
+
+  // LLM explanation of the verdict above. Display only — never an input to any field above.
+  "explanation": {
+    "available": true,               // false ⇒ show nothing (skipped, LLM failed, NLI down, or nothing survived)
+    "reason": "",                    // why it is unavailable, when it is
+    "text": "The Federal Reserve raised its benchmark rate by a quarter point [1].",  // kept sentences only
+    "sentences": [                   // every sentence the LLM wrote, kept or not
+      { "text": "...", "citations": [1], "kept": true, "entailment": 0.93, "drop_reason": "" }
+    ],
+    "dropped_count": 0,              // sentences removed: uncited, citing an unknown source, or not entailed
+    "model": "gemini-3.8-flash"      // the model that actually wrote it (a fallback, if the primary failed)
+  }
 }
 ```
+
+`[n]` in `explanation.text` is the source's 1-based position in `top_evidence`.
 
 `verification` carries the outcome and the triage facts behind it:
 
@@ -354,6 +479,19 @@ This is the actual `CheckResponse` shape from `ml-service/main.py`, proxied unch
   "nli": {
     "enabled": true,
     "model": "cross-encoder/nli-deberta-v3-base",
+    "status": "ready",
+    "error": null
+  },
+  "passage_ranking": {
+    "enabled": true,
+    "model": "sentence-transformers/all-MiniLM-L6-v2",
+    "status": "ready",
+    "error": null
+  },
+  "explanations": {
+    "enabled": true,
+    "model": "gemini-3.8-flash",
+    "fallback_models": ["gemini-3.5-flash-lite"],
     "status": "ready",
     "error": null
   },
@@ -438,7 +576,15 @@ All served by `server/` (Express), all under `/api`:
 | `GNEWS_API_KEY` | No | — | Enables the GNews provider. Without it, only DuckDuckGo runs. |
 | `GUARDIAN_API_KEY` | No | — | Enables The Guardian provider. |
 | `NEWSAPI_KEY` | No | — | Enables the NewsAPI provider. |
-| `NLI_PRELOAD` | No | `true` | Load the NLI model at startup instead of on the first request. Leave this on: lazily loading it meant the first evidence-requiring request paid for the model download *inside the HTTP request*, unbounded by `EVIDENCE_BUDGET_SECONDS`. Startup takes longer on a cold cache, but that cost is visible in the log instead of surfacing as a mystery timeout. |
+| `NLI_PRELOAD` | No | `true` | Load the NLI model (and the passage embedder, when `SEMANTIC_PASSAGES` is on) at startup instead of on the first request. Leave this on: lazily loading it meant the first evidence-requiring request paid for the model download *inside the HTTP request*, unbounded by `EVIDENCE_BUDGET_SECONDS`. Startup takes longer on a cold cache, but that cost is visible in the log instead of surfacing as a mystery timeout. |
+| `SEMANTIC_PASSAGES` | No | `true` | Dense + lexical hybrid passage ranking. `false` restores word-overlap ranking exactly. |
+| `PASSAGE_EMBED_MODEL` | No | `sentence-transformers/all-MiniLM-L6-v2` | Sentence-embedding model for passage ranking (~90 MB, CPU). |
+| `SEMANTIC_MIN_SIMILARITY` | No | `0.30` | Cosine floor below which the embedder nominates nothing. See the sweep in [Hybrid retrieval](#hybrid-retrieval--grounded-explanations). |
+| `EXPLANATIONS_ENABLED` | No | `true` | NLI-checked LLM explanations. Without `GOOGLE_API_KEY` they are reported unavailable, never faked. |
+| `GOOGLE_API_KEY` | No | — | Gemini API key (free at aistudio.google.com). **Secret — `.env` only.** |
+| `EXPLAIN_MODEL` | No | `gemini-3.8-flash` | Model that writes explanations. |
+| `EXPLAIN_FALLBACK_MODELS` | No | `gemini-3.5-flash-lite` | Comma-separated; tried in order only if the model before fails (free-tier models return 503 under load). Empty = primary only. |
+| `EXPLAIN_TIMEOUT_SECONDS` | No | `10` | Per-attempt limit. Runs after `EVIDENCE_BUDGET_SECONDS`, not inside it. The Gemini API refuses deadlines under 10 s. |
 | `EVIDENCE_BUDGET_SECONDS` | No | `45` | Hard ceiling on the evidence phase of one `/api/check`, shared across every extracted claim. Bounds search + article extraction so a blocked provider degrades to partial evidence instead of hanging the request. Must stay comfortably below the server's `ML_SERVICE_TIMEOUT_MS`. |
 | `PORT` | No | `8000` | Set automatically by Render; the Dockerfile's `CMD` already handles `${PORT:-8000}`. |
 
@@ -483,18 +629,25 @@ npm install
 npm run dev                             # http://localhost:5173
 ```
 
+Each service ships a `.env.example`; copy it to `.env` and fill in what you need. On Windows, `scripts/demo_warmup.ps1` starts all three services and warms both models in one step.
+
 The first evidence check (a non-deterministic claim) triggers the NLI model download on first use — this can take a minute depending on your connection. Deterministic claims (basic science/math facts) never touch NLI or the network at all.
 
 ## Testing
 
 ```bash
-# ML service — 446 tests covering claim normalisation and triage, claim
+# ML service — 508 tests (pytest + httpx: pip install -r requirements-dev.txt)
+# covering claim normalisation and triage, claim
 # decomposition, coverage modes and article dating, relevance and action
 # filtering, query generation, numeric-consistency and boilerplate guards,
 # HTML extraction hazards, NLI label-mapping safety, the stance rule, evidence
 # aggregation, absence-of-coverage rules, provider failure/diagnostics
 # handling, keyless-provider parsing, pipeline time budgets, and end-to-end
-# verdict behaviour for every claim shape (tests/test_claim_edge_cases.py).
+# verdict behaviour for every claim shape (tests/test_claim_edge_cases.py),
+# hybrid passage ranking (tests/test_dense_passages.py) and NLI-checked
+# explanations (tests/test_explainer.py). tests/conftest.py switches both new
+# features off and forces Hugging Face offline mode, so no test downloads a
+# model or calls Gemini.
 cd ml-service
 pip install -r requirements.txt
 python -m pytest tests/ -q
@@ -640,6 +793,32 @@ Smaller checkpoints are one environment variable away, and all four are pre-veri
 | `cross-encoder/nli-deberta-v3-small` | ~141M | Previous default. |
 | `cross-encoder/nli-deberta-v3-xsmall` | ~71M | Faster startup. |
 | `cross-encoder/nli-MiniLM2-L6-H768` | ~22M | Smallest; noticeably weaker. |
+| `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli` | ~184M | **Recommended — set in `.env.example`.** Named labels, so no table entry is needed. |
+
+**Why the MoritzLaurer checkpoint.** The `cross-encoder/nli-*` family is
+trained on SNLI, whose annotation convention files an unrelated
+premise/hypothesis pair as *contradiction*. Measured on 2026-10-07,
+`nli-deberta-v3-small` scored *"The scenery on the Shropshire Way is at its
+best in spring"* as a **1.00 contradiction** of *"Russia invaded Ukraine in
+February 2022"* — and that one habit produced most of this system's wrong
+answers: off-topic articles that reached NLI contradicted whatever they were
+compared with, at full source-tier weight. The MoritzLaurer checkpoint is
+trained on MNLI + FEVER + ANLI and scores the same pair **1.00 neutral**. On
+`stance_sweep.py`'s labelled corpus at the shipped thresholds:
+
+| Model | Accuracy | Contradiction precision | Invented positions |
+|---|---|---|---|
+| `cross-encoder/nli-deberta-v3-small` | 0.61 | 0.45 | 6 / 23 |
+| `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli` | **0.91** | **0.78** | **2 / 23** |
+
+It is not a cure: a topical sentence that simply does not mention the
+claim's date ("Russia gained 90 sq km of Ukraine in August") still scores
+0.99 contradiction against "…invaded Ukraine in February 2022".
+
+On Windows the Hugging Face cache uses symlinks, which need Developer Mode or
+admin rights. If a download reports `WinError 1314`, the weights are usually
+fine but small tokenizer files are missing from the snapshot — re-download
+them with `hf_hub_download(..., local_dir=...)` and copy them in.
 
 Budget 1GB+ of RAM regardless of choice — PyTorch's own import footprint is 300–500MB before any weights load. Whichever you pick, measure it rather than assuming: `python stance_sweep.py --show-errors` scores the checkpoint against a labelled corpus and reports *invented positions* (sources recorded as taking a stance they do not take), which matters more than raw accuracy.
 
@@ -722,6 +901,8 @@ newschecker/
 │   │                                NewsAPI, DuckDuckGo + registry/diagnostics
 │   ├── relevance_filter.py         Candidate → relevant-source filtering (entity + action)
 │   ├── article_extractor.py        Full-text + passage extraction
+│   ├── passage_retriever.py        Dense passage ranking (MiniLM) + reciprocal rank fusion
+│   ├── explainer.py                Gemini explanation of the verdict, filtered by NLI
 │   ├── nli_service.py              Single authoritative NLI service (state machine + label safety)
 │   ├── evidence_aggregator.py      Stance aggregation, independent-publisher clustering,
 │   │                                absence-of-coverage assessment
@@ -732,9 +913,12 @@ newschecker/
 │   ├── tfidf.py                    From-scratch TF-IDF vectorizer (feeds the legacy MLP only)
 │   ├── classifier.py / mlp_classifier.py   Experimental baselines, offline evaluation only
 │   ├── evaluate_models.py / evaluate_production_model.py   Offline evaluation scripts
-│   └── tests/                      446 tests across the modules above, incl.
+│   └── tests/                      508 tests across the modules above, incl.
 │                                    test_claim_edge_cases.py (end-to-end verdicts)
 ├── docs/screenshots/              README images
+├── docs/benchmarks/               Saved news_benchmark runs (hybrid vs lexical)
+├── docs/DEMO.md                   Demo claims, 2.5-minute script, recording checklist
+├── scripts/                       demo_warmup.ps1, run_rag_benchmark.ps1 (Windows)
 ├── IMPROVEMENTS.md                 Dated engineering log of major fixes/audits
 └── vercel.json                     Client + server deployment config
 ```
@@ -749,6 +933,8 @@ Being direct about these matters more than pretending they don't exist:
 - **English only.** Claims in other languages are detected and reported as out of scope rather than checked. The detection is a heuristic over character scripts and function words; it can miss a short Latin-script sentence, in which case the claim falls through to the ordinary "no assertion found" path — a worse message, but not a wrong verdict.
 - **Claim triage is heuristic.** `claim_triage.py` classifies by pattern, not by parsing. It handles the shapes in `tests/test_claim_edge_cases.py` — including the traps that broke it during development (factual superlatives read as opinions, irregular past tenses read as non-assertions, pasted links read as claims) — but an unusual phrasing can still land in the wrong bucket. The failure is designed to be safe in one direction: an over-admitted claim gets searched, an over-rejected one refuses to check something real, so the thresholds lean toward admitting.
 - **Temporal checking is coarse.** The pipeline *does* now compare an article's publish date against the claim's timeframe (see [Coverage modes](#nli-model--memory) — `recent` restricts retrieval to the last 30 days and refuses to let an older article confirm the claim). Three limits remain: providers differ on whether they supply a date at all — Wikipedia and DuckDuckGo supply none, and an undated document is never treated as stale, because deleting real evidence over a missing field is the worse error; the staleness window (45 days) is deliberately wider than the retrieval window, so a document from just outside it still counts; and nothing compares a date against the article's *own* internal timeline, so a recent retrospective about an old event is still readable as current coverage.
+- **Same kind of event ≠ same event.** "Crash shuts down Route 44" is about a crash closing a route, so it passes the aboutness check, and NLI reads it as contradicting "Crash shuts down Route 209". A differing number can be a genuine contradiction (a rate rise of 0.5% vs 0.25%) or a different referent (Route 44 vs Route 209); `numeric_consistency` only withdraws *support* on a mismatch, and telling the two cases apart for contradictions is open work.
+- **Headline claims with weak queries.** For short headlines, `query_generator` can drop the most specific words ("Morning crash shuts down Route 209" was searched as `Route shuts`), which lets loosely related documents into the pool. The aboutness check limits the damage; it does not fix the queries.
 - **Claim decomposition is regex-based, not a real parser.** `claim_decomposer.py` uses pattern matching for entities/predicates/negation/modality, not dependency parsing or a trained NER model. It works well for the claim shapes it's been tested against but isn't as robust as a full NLP pipeline would be.
 - **The legacy MLP works, and still cannot be a fact-checker.** On the LIAR test set it scores **61.88%** (95% CI 59.12–64.48) against a **56.35%** majority-class baseline. The interval's lower bound clears the baseline, so that +5.5 points is a real effect rather than split luck, and the model is calibrated (ECE 0.046). It is a respectable result for judging a claim from its wording alone.
 
