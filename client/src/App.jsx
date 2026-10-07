@@ -121,8 +121,6 @@ function App() {
   
   // Fact-check state
   const [statement, setStatement] = useState("");
-  // "auto" | "recent" | "historical" — see the picker below.
-  const [mode, setMode] = useState("auto");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
@@ -278,7 +276,12 @@ function App() {
       const res = await fetch(`${API_BASE}/api/check`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ statement: trimmed, mode }),
+        // Coverage mode is always "auto": the ML service reads the claim's own
+        // wording to decide between the last month and no date limit. A
+        // Recent/Historical picker used to sit under the input; it was removed
+        // because people did not use it and it added a decision before the
+        // first check. The API still accepts mode explicitly.
+        body: JSON.stringify({ statement: trimmed, mode: "auto" }),
       });
       
       if (!res.ok) {
@@ -438,29 +441,6 @@ function App() {
           disabled={loading}
         />
         <div className="input-footer">
-          {/* Coverage mode. "Auto" reads the claim's own wording, which only
-              works when the claim says "today" — someone who just saw a story
-              on television types it without a time word at all, and no parser
-              recovers that. The choice belongs to the person checking. */}
-          <div className="mode-picker" role="group" aria-label="Coverage to search">
-            {[
-              ["auto", "Auto", "Decide from the wording of the claim"],
-              ["recent", "Recent", "Only coverage from the last month"],
-              ["historical", "Historical", "Search without a date limit"],
-            ].map(([value, label, title]) => (
-              <button
-                key={value}
-                type="button"
-                title={title}
-                className={`mode-option${mode === value ? " active" : ""}`}
-                onClick={() => setMode(value)}
-                disabled={loading}
-                aria-pressed={mode === value}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
           <span className="char-count">{statement.length}/2000</span>
           <button
             type="submit"

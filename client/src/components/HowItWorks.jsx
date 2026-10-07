@@ -283,24 +283,45 @@ export default function HowItWorks() {
         <div className="hiw-tech-grid">
           {[
             {
-              label: "ML / Data",
-              items: ["Python", "NumPy", "Pandas", "TF-IDF (auxiliary ML feature only)"],
+              label: "ML / NLP",
+              items: [
+                "PyTorch (CPU) + Hugging Face Transformers",
+                "DeBERTa-v3 NLI cross-encoder",
+                "Sentence-Transformers (all-MiniLM-L6-v2)",
+                "Reciprocal rank fusion (hybrid retrieval)",
+                "Gemini Flash via google-genai (explanations only)",
+                "NumPy MLP + TF-IDF (auxiliary only)",
+              ],
             },
             {
               label: "Backend",
-              items: ["FastAPI", "Node.js / Express", "MongoDB"],
+              items: [
+                "Python 3.12 · FastAPI · Uvicorn",
+                "Node.js · Express 5",
+                "MongoDB · Mongoose",
+                "Google OAuth + JWT",
+              ],
             },
             {
               label: "Frontend",
-              items: ["React (Vite)", "Vanilla CSS", "Lucide Icons"],
+              items: ["React 19 (Vite)", "Vanilla CSS", "Lucide Icons"],
             },
             {
-              label: "APIs",
+              label: "Data sources",
               items: [
                 "Google News RSS (no key)",
                 "Wikipedia (no key)",
                 "GNews", "NewsAPI", "The Guardian",
                 "DuckDuckGo (fallback)",
+              ],
+            },
+            {
+              label: "Testing",
+              items: [
+                "pytest — 517 offline tests",
+                "Node test runner",
+                "ESLint",
+                "Live benchmark (news_benchmark.py)",
               ],
             },
           ].map((group) => (
@@ -327,56 +348,67 @@ function EvidencePipelineDiagram() {
     "Triage",
     "Search",
     "Relevance",
-    "Passage",
+    "Passages",
     "NLI",
     "Verdict",
+    "Explain",
   ];
   // Evenly spaced from a single pitch so adding a stage can't reintroduce the
   // clipping bug: the last node's right edge must stay inside the viewBox,
-  // and that is now derived rather than hand-maintained.
-  // Sized so the longest label ("Relevance", ~44px at 9px type) fits inside
-  // its box rather than bleeding past the rounded corners.
-  const nodeSize = 50;
-  const pitch = 84;
-  const startX = 24;
-  const x = steps.map((_, i) => startX + i * pitch);
-  const width = startX + (steps.length - 1) * pitch + nodeSize + startX;
-  const height = 180;
+  // and that is derived rather than hand-maintained. Sized so the longest
+  // label ("Relevance", ~62px at 12px type) sits well inside its box.
+  const nodeW = 84;
+  const nodeH = 56;
+  const gap = 28;
+  const pitch = nodeW + gap;
+  const pad = 8;
+  const top = 12;
+  const x = steps.map((_, i) => pad + i * pitch);
+  const width = pad * 2 + (steps.length - 1) * pitch + nodeW;
+  const height = top * 2 + nodeH;
+  const mid = top + nodeH / 2;
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="hiw-nn-svg">
+    <svg viewBox={`0 0 ${width} ${height}`} className="hiw-nn-svg" role="img"
+         aria-label={`Pipeline: ${steps.join(", then ")}`}>
+      {x.slice(0, -1).map((val, i) => (
+        <g key={`arrow-${i}`}>
+          <line
+            x1={val + nodeW + 3}
+            y1={mid}
+            x2={x[i + 1] - 9}
+            y2={mid}
+            className="hiw-nn-conn"
+          />
+          <polygon
+            points={`${x[i + 1] - 9},${mid - 5} ${x[i + 1] - 2},${mid} ${x[i + 1] - 9},${mid + 5}`}
+            className="hiw-nn-arrowhead"
+          />
+        </g>
+      ))}
       {steps.map((label, i) => (
         <g key={label}>
           <rect
             x={x[i]}
-            y={60}
-            width={nodeSize}
-            height={nodeSize}
-            rx={10}
+            y={top}
+            width={nodeW}
+            height={nodeH}
+            rx={12}
             className={
-              i % 2 === 0 ? "hiw-nn-node hiw-nn-input" : "hiw-nn-node hiw-nn-hidden"
+              i === steps.length - 1
+                ? "hiw-nn-node hiw-nn-output"
+                : i % 2 === 0 ? "hiw-nn-node hiw-nn-input" : "hiw-nn-node hiw-nn-hidden"
             }
           />
           <text
-            x={x[i] + nodeSize / 2}
-            y={82}
-            textAnchor="middle"
+            x={x[i] + nodeW / 2}
+            y={mid}
             className="hiw-nn-label"
-            style={{ fontSize: 9 }}
+            style={{ fontSize: 12 }}
           >
             {label}
           </text>
         </g>
-      ))}
-      {x.slice(0, -1).map((val, i) => (
-        <line
-          key={`arrow-${i}`}
-          x1={val + nodeSize}
-          y1={81}
-          x2={x[i + 1]}
-          y2={81}
-          className="hiw-nn-conn"
-        />
       ))}
     </svg>
   );

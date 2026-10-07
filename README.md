@@ -364,8 +364,10 @@ check. It changed which passages NLI read for 5 of 8 articles.
 |---|---|
 | **Frontend** | React 19, Vite, vanilla CSS (no UI framework), Lucide icons, Google Identity Services |
 | **API gateway** | Node.js, Express 5, Mongoose, JSON Web Tokens, `google-auth-library` |
-| **ML service** | Python 3.11, FastAPI, Uvicorn, NumPy, Pandas |
-| **NLI** | HuggingFace `transformers` + PyTorch (CPU-only wheel), a cross-encoder NLI model |
+| **ML service** | Python 3.12, FastAPI, Uvicorn, NumPy, Pandas |
+| **NLI** | HuggingFace `transformers` + PyTorch (CPU-only wheel, float32), DeBERTa-v3 NLI cross-encoder — `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli` recommended |
+| **Passage retrieval** | `sentence-transformers` (`all-MiniLM-L6-v2`) fused with lexical ranking by reciprocal rank fusion — in memory, no vector DB |
+| **Explanations** | Gemini Flash via `google-genai` (free tier), every sentence filtered by the NLI model — never an input to the verdict |
 | **Legacy ML** | From-scratch NumPy MLP + TF-IDF vectorizer (no sklearn/PyTorch) — auxiliary signal only |
 | **Search providers** | Google News RSS + Wikipedia (keyless, on by default), GNews / The Guardian / NewsAPI (optional, key-gated), DuckDuckGo HTML (fallback) |
 | **Database** | MongoDB (Atlas or self-hosted) via Mongoose |
