@@ -60,7 +60,14 @@ const TECH_STACK = [
   },
   {
     label: "Data sources",
-    items: ["GNews", "NewsAPI", "The Guardian", "DuckDuckGo (fallback)"],
+    items: [
+      "Google News",
+      "Wikipedia",
+      "GNews",
+      "NewsAPI",
+      "The Guardian",
+      "DuckDuckGo (fallback)",
+    ],
   },
   {
     label: "Testing",
