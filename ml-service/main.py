@@ -1,13 +1,14 @@
 """
 FILE PURPOSE:
 This is the main entry point for the Python ML Service.
-It runs a FastAPI web server that exposes the machine learning model to the Node.js backend.
+It runs a FastAPI web server that the Node.js backend calls to check claims.
 
 FLOW:
-1. `lifespan`: When the server starts, it loads the trained MLP model and TF-IDF vectorizer from disk into memory.
+1. `lifespan`: at startup, loads API keys and warms the NLI model and the
+   passage embedder, so the first request does not pay for model loading.
 2. Registers two endpoints: `/api/health` and `/api/check`.
 3. When `/api/check` is hit:
-   - It returns the legacy MLP score as an experimental claim prior.
+   - It triages the claim and answers textbook facts deterministically.
    - It extracts atomic claims, retrieves evidence, and uses NLI to compare
      each claim with relevant passages.
    - It produces a verdict only when enough classified evidence is available.
@@ -22,25 +23,18 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
 # PATH CONFIGURATION
-# Make sure sibling modules (binary_truth_mlp, evidence_scraper, tfidf, etc.)
-# are importable when this file is executed.
+# Make sure sibling modules are importable when this file is executed.
 # ---------------------------------------------------------------------------
 SERVICE_DIR = Path(__file__).resolve().parent
 if str(SERVICE_DIR) not in sys.path:
     sys.path.insert(0, str(SERVICE_DIR))
 
-from binary_truth_mlp import (
-    MODEL_FILE,
-    explain_probability,
-    load_artifacts,
-    make_prediction_features,
-)
 from claim_normalizer import normalize_claim
 from claim_recency import resolve_mode
 from claim_triage import triage_claim
@@ -84,15 +78,6 @@ def load_env_file():
                 if key and key not in os.environ:
                     os.environ[key] = value
 
-# ---------------------------------------------------------------------------
-# GLOBAL STATE
-# We load the model once when the server starts and keep it in memory.
-# Loading a model on every single request would be incredibly slow.
-# ---------------------------------------------------------------------------
-_model = None
-_vectorizer = None
-_train_max_values = None
-
 # Hard ceiling on the evidence phase of a single /api/check request, shared
 # across all extracted claims. Kept well under the Node proxy's own timeout
 # (ML_SERVICE_TIMEOUT_MS) so a slow provider surfaces as partial evidence
@@ -128,37 +113,15 @@ PURPOSE:
 This function runs exactly once when the FastAPI server starts up.
 
 WHY THIS EXISTS:
-Neural network files can be hundreds of megabytes. We use this startup block to 
-read the `.pkl` file from the hard drive into RAM so it's ready to instantly serve requests.
+The NLI model and the passage embedder are hundreds of megabytes. Loading them
+here, before any request, keeps that cost out of the first user's check.
 """
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _model, _vectorizer, _train_max_values
-
-    # Step 1: Locate the trained model file
-    model_path = SERVICE_DIR / "binary_truth_mlp.pkl"
-    if not model_path.exists():
-        model_path = SERVICE_DIR / "saved_models" / "binary_truth_mlp.pkl"
-
-    if not model_path.exists():
-        raise RuntimeError(
-            f"Cannot find the trained model. Looked in:\n"
-            f"  {SERVICE_DIR / 'binary_truth_mlp.pkl'}\n"
-            f"  {SERVICE_DIR / 'saved_models' / 'binary_truth_mlp.pkl'}"
-        )
-
-    # Step 2: Load the model, vectorizer, and scaling values
-    print(f"Loading model from {model_path} …")
-    _model, _vectorizer, _train_max_values = load_artifacts(model_path)
-    print(
-        f"Model loaded — input_size={_model.input_size}, "
-        f"threshold={_model.best_threshold:.2f}"
-    )
-
-    # Step 3: Load API keys for the web scraper
+    # Step 1: Load API keys for the search providers and Gemini
     load_env_file()
 
-    # Step 4: Warm the NLI model.
+    # Step 2: Warm the NLI model.
     # Loading it lazily meant the first evidence-requiring request paid for
     # the model download (hundreds of MB on a cold cache) inside the HTTP
     # request — unbounded by the evidence budget, and silent, because
@@ -245,15 +208,6 @@ class CheckRequest(BaseModel):
 
 
 # ── Nested response models ───────────────────────────────────────────
-class MLInfo(BaseModel):
-    """Legacy MLP signal — advisory only, never drives the verdict."""
-    available: bool = True
-    auxiliary_only: bool = True
-    score: float = 0.0
-    verdict: str = ""
-    threshold: float = 0.5
-
-
 class RetrievalInfo(BaseModel):
     """What happened during the search phase."""
     status: str = "NO_RESULTS"
@@ -375,15 +329,11 @@ class CheckResponse(BaseModel):
     confidence: str = "low"
 
     verification: VerificationInfo = Field(default_factory=VerificationInfo)
-    ml: MLInfo = Field(default_factory=MLInfo)
     retrieval: RetrievalInfo = Field(default_factory=RetrievalInfo)
     nli: NLIInfo = Field(default_factory=NLIInfo)
     evidence: EvidenceSummary = Field(default_factory=EvidenceSummary)
 
-    # Legacy fields kept for backward compatibility with the frontend
-    ml_score: float = 0.0
-    ml_verdict: str = ""
-    ml_threshold: float = 0.5
+    # Legacy flattened fields kept for backward compatibility with the frontend
     evidence_score: float = 0.0
     evidence_stance: dict = Field(default_factory=dict)
     combined_score: int = 50
@@ -432,12 +382,7 @@ NON_NUMERIC_STATUSES = frozenset({
 
 
 def evidence_verdict_score(stance: dict) -> int:
-    """A visual evidence balance only; it is not a probability of truth.
-
-    The legacy MLP is returned for transparency but is intentionally excluded:
-    it was trained on historical US political statements and is not a reliable
-    universal-news classifier.
-    """
+    """A visual evidence balance only; it is not a probability of truth."""
     if stance.get("status") in NON_NUMERIC_STATUSES:
         return 50
     net = max(-1.0, min(1.0, float(stance.get("net", 0.0))))
@@ -735,9 +680,6 @@ async def health():
     return {
         "status": "ok",
         "service": "newschecker-ml",
-        "model_loaded": _model is not None,
-        "input_size": _model.input_size if _model else None,
-        "threshold": _model.best_threshold if _model else None,
         "nli": nli_svc.status,
         "passage_ranking": get_passage_ranker().status,
         "explanations": explainer.status(),
@@ -750,10 +692,11 @@ PURPOSE:
 The primary fact-checking logic.
 
 FLOW:
-1. Validates the legacy MLP is loaded and returns its claim-only prior.
+1. Normalises and triages the claim; answers textbook facts deterministically.
 2. Extracts atomic claims, retrieves candidate evidence, and runs NLI.
 3. Abstains if evidence is unavailable, weak, or from unclassified sources.
-4. Returns evidence, claim-level outcomes, and a conservative overall status.
+4. Returns evidence, claim-level outcomes, and a conservative overall status,
+   plus an optional NLI-checked explanation that cannot change it.
 """
 @app.post("/api/check", response_model=CheckResponse)
 def check_statement(request: CheckRequest):
@@ -762,10 +705,6 @@ def check_statement(request: CheckRequest):
     # inference). On an `async def` handler that work runs directly on the
     # event loop and freezes the entire service for its duration — including
     # /api/health. As a sync def, FastAPI runs it in its threadpool instead.
-    if _model is None:
-        # If the server is still booting up and loading the massive .pkl file
-        raise HTTPException(status_code=503, detail="Model not loaded yet.")
-
     start = time.time()
     submitted = request.statement.strip()
 
@@ -788,16 +727,7 @@ def check_statement(request: CheckRequest):
     # thing a pasted headline says about when the event happened.
     claim_time = resolve_mode(statement, request.mode, submitted=submitted)
 
-    # --- 1. ML Prediction Phase ---
-    # Convert text into a numerical array (TF-IDF features)
-    features = make_prediction_features(
-        vectorizer=_vectorizer,
-        train_max_values=_train_max_values,
-        statement=statement,
-    )
-    # Ask the Neural Network for its prediction (returns a 0 to 1 probability)
-    ml_score = float(_model.predict_proba(features)[0])
-    ml_verdict = explain_probability(ml_score)
+    # --- 1. Deterministic check for textbook facts ---
     knowledge_assessment = assess_claim(statement)
 
     # --- 2. Triage: what kind of question does this claim even pose? ---
@@ -1040,13 +970,6 @@ def check_statement(request: CheckRequest):
             claim_kind=triage.kind,
             salience=triage.salience,
         ),
-        ml=MLInfo(
-            available=True,
-            auxiliary_only=True,
-            score=round(ml_score, 4),
-            verdict=ml_verdict,
-            threshold=round(_model.best_threshold, 4),
-        ),
         retrieval=RetrievalInfo(
             status=retrieval_status,
             candidate_count=candidate_count,
@@ -1071,10 +994,7 @@ def check_statement(request: CheckRequest):
             independent_contradicting=ev_stance.get("independent_contradicting", 0),
         ),
 
-        # Legacy fields for backward compatibility
-        ml_score=round(ml_score, 4),
-        ml_verdict=ml_verdict,
-        ml_threshold=round(_model.best_threshold, 4),
+        # Legacy flattened fields for backward compatibility
         evidence_score=round(ev_score, 4),
         evidence_stance={
             **ev_stance,

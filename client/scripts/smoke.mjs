@@ -36,7 +36,7 @@ try {
 }
 
 const BASE = process.env.SMOKE_BASE_URL || "http://localhost:4173";
-const ROUTES = ["", "#/comparison", "#/how-it-works"];
+const ROUTES = ["", "#/how-it-works"];
 
 const browser = await chromium.launch();
 let failures = 0;

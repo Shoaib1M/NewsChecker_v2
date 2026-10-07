@@ -40,8 +40,11 @@ class ApiTests(unittest.TestCase):
         response = self.client.get("/api/health")
         self.assertEqual(response.status_code, 200)
         body = response.json()
-        self.assertTrue(body["model_loaded"])
         self.assertIn("status", body["nli"])
+        self.assertIn("status", body["passage_ranking"])
+        self.assertIn("status", body["explanations"])
+        # The legacy LIAR classifier was removed; health no longer reports it.
+        self.assertNotIn("model_loaded", body)
         self.assertIn(body["nli"]["status"], {"disabled", "loading", "ready", "failed"})
         for provider in ("gnews", "guardian", "newsapi", "duckduckgo"):
             self.assertIn(provider, body["search_providers"])

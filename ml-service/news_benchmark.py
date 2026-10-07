@@ -9,10 +9,11 @@ and state plainly what that number does and does not mean.
     python news_benchmark.py --from-file run.json   # re-score a saved set
 
 WHY THIS EXISTS:
-"How accurate is it?" had no answer. The LIAR figure (61.9% against a 56.4%
-majority class) measures a model that ships only as a prior, and says nothing
-about the evidence pipeline that actually decides verdicts. Nothing measured
-the thing that matters, so every claim about quality was intuition.
+"How accurate is it?" had no answer. The only number the project had was a
+LIAR-dataset accuracy for a wording-only classifier (since removed), which
+said nothing about the evidence pipeline that actually decides verdicts.
+Nothing measured the thing that matters, so every claim about quality was
+intuition.
 
 ────────────────────────────────────────────────────────────────────────────
 WHERE THE GROUND TRUTH COMES FROM — READ THIS BEFORE QUOTING A NUMBER

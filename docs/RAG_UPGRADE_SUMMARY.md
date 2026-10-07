@@ -16,9 +16,12 @@ not pushed). Written 2026-10-07.
 | NLI model | `.env.example` recommends `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli` (stance_sweep accuracy 0.61 → 0.91). | `.env.example`, README |
 | Test hygiene | 4 stale tests no longer hit the live internet; developer API keys can no longer leak into tests; HF offline mode in tests. | `tests/conftest.py`, `test_provider_registry.py`, `test_pipeline_budget.py` |
 | Measurement | Benchmark reports recall, abstention, latency and search failures; explanation quality script; Windows scripts. | `news_benchmark.py`, `explanation_check.py`, `scripts/*.ps1` |
+| Legacy classifier removed | The LIAR-trained MLP (wording-only, never read by the verdict), its training/evaluation scripts, dataset, tests, the Evaluation and Comparison pages and the `ml` API fields. | `main.py`, `server/`, `client/` |
+| UI cleanup | How It Works spacing and diagram, current tech stack, Auto/Recent/Historical picker removed. | `client/src/` |
 | Docs | README section, diagrams, env tables, limitations; CLAUDE.md; demo guide; this file. | `README.md`, `CLAUDE.md`, `docs/` |
 
-Tests: **ml-service 517 passed** (was 465 passed + 2 failing), **server 24
+Tests: **ml-service 480 passed** (517 before the legacy classifier and its 37
+tests were removed; the baseline was 465 passed + 2 failing), **server 24
 passed**, client lint + build clean.
 
 ## 2. How to run it
@@ -37,7 +40,7 @@ Full table and discussion: README → *Hybrid retrieval & grounded explanations 
 ## 4. Resume bullets
 
 - Added hybrid dense + lexical passage retrieval (MiniLM, reciprocal rank fusion) and NLI-verified LLM explanations to an evidence-first fact-checker; benchmarked it honestly (no significant change on 17 live claims) and used per-claim error analysis to find an NLI failure mode, lifting stance accuracy on a labelled corpus from 61% to 91%.
-- Found and fixed a silent ~100× CPU slowdown (float16 checkpoint on CPU) and test-isolation leaks that sent real API calls from the test suite; grew the suite from 465 to 517 passing tests with no network or model downloads.
+- Found and fixed a silent ~100× CPU slowdown (float16 checkpoint on CPU) and test-isolation leaks that sent real API calls from the test suite; the suite runs 480 tests with no network or model downloads.
 
 ## 5. Top 10 interview questions
 
@@ -100,7 +103,7 @@ records retrieval status. (b) The better NLI checkpoint ships a float16 config;
 on CPU that made each pair take 13.7 s instead of 0.18 s. Nothing errored —
 checks just got slow. Fixed by pinning float32, with a regression test.
 
-**9. How do you keep 500+ tests deterministic when the system depends on live
+**9. How do you keep ~500 tests deterministic when the system depends on live
 news, models and an LLM?**
 Every external dependency is behind a seam that tests replace: providers,
 NLI, the embedder, Gemini. `conftest.py` turns the new features off, forces

@@ -5,7 +5,7 @@ This route acts as a "Proxy" (a middleman) between the React Frontend and the Py
 FLOW:
 1. Receives a statement from the frontend.
 2. Forwards (proxies) that statement to the Python FastAPI service.
-3. Receives the ML prediction and scraped evidence from Python.
+3. Receives the verdict and classified evidence from Python.
 4. If the user is logged in, saves the result to MongoDB.
 5. Sends the final result back to the frontend.
 
@@ -58,7 +58,7 @@ INPUT:
 req.body.statement (The string the user typed)
 
 OUTPUT:
-The combined results from the ML model and evidence scraper.
+The verdict, evidence and explanation from the ML service.
 
 WHY THIS EXISTS:
 Why not have the frontend talk directly to Python? 
@@ -155,8 +155,6 @@ router.post("/", optionalAuth, async (req, res) => {
         savedCheck = await Check.create({
           userId: req.user.userId,
           statement: result.statement,
-          mlScore: result.ml_score,
-          mlVerdict: result.ml_verdict,
           evidenceScore: result.evidence_score,
           evidenceStance: result.evidence_stance,
           combinedScore: result.combined_score,
@@ -184,13 +182,6 @@ router.post("/", optionalAuth, async (req, res) => {
             reasoning: result.verification.reasoning,
             claimKind: result.verification.claim_kind,
             salience: result.verification.salience,
-          },
-          ml: result.ml && {
-            available: result.ml.available,
-            auxiliaryOnly: result.ml.auxiliary_only,
-            score: result.ml.score,
-            verdict: result.ml.verdict,
-            threshold: result.ml.threshold,
           },
           coverage: result.coverage && {
             mode: result.coverage.mode,

@@ -1,7 +1,7 @@
 /*
 FILE PURPOSE:
 Defines the Mongoose schema and model for a fact-check request (a "Check").
-This stores the history of statements that users have submitted, along with the ML scores, evidence, and final verdicts.
+This stores the history of statements that users have submitted, along with the evidence and final verdicts.
 
 FLOW:
 1. Define a sub-schema for individual pieces of evidence (articles scraped from the web).
@@ -48,7 +48,7 @@ const evidenceItemSchema = new mongoose.Schema(
 /*
 PURPOSE:
 The main schema for a fact-check record.
-Stores what the user asked, what the ML model predicted, and the evidence found.
+Stores what the user asked, the verdict, and the evidence found.
 */
 const checkSchema = new mongoose.Schema(
   {
@@ -66,15 +66,6 @@ const checkSchema = new mongoose.Schema(
       required: true,
     },
     
-    // The raw probability score from our Binary Truth MLP model
-    mlScore: {
-      type: Number,
-      required: true,
-    },
-    
-    // The text label based on the mlScore (e.g., "Likely False")
-    mlVerdict: String,
-    
     // The overall score derived purely from the web evidence
     evidenceScore: Number,
     
@@ -86,7 +77,7 @@ const checkSchema = new mongoose.Schema(
       verdict: String,
     },
     
-    // The final blended score (ML model + Evidence) from 0 to 100
+    // Visual evidence-balance score from 5 to 95 (not a probability of truth)
     combinedScore: {
       type: Number,
       required: true,
@@ -116,7 +107,7 @@ const checkSchema = new mongoose.Schema(
     // ── Structured response schema (mirrors ml-service's CheckResponse) ──
     // Stored alongside the legacy flattened fields above so that loading a
     // saved check from history renders identically to a live check — the
-    // frontend reads verification/ml/retrieval/nli/evidenceSummary directly
+    // frontend reads verification/retrieval/nli/evidenceSummary directly
     // rather than reconstructing them from flattened numbers.
     claimType: String,
     verdict: String,
@@ -132,13 +123,6 @@ const checkSchema = new mongoose.Schema(
       // check from history renders the same verdict wording as the live one.
       claimKind: String,
       salience: String,
-    },
-    ml: {
-      available: Boolean,
-      auxiliaryOnly: Boolean,
-      score: Number,
-      verdict: String,
-      threshold: Number,
     },
     // Which slice of coverage was searched, and why. Without this a
     // replayed check cannot say whether only the last month was read.

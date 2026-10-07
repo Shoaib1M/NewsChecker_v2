@@ -30,7 +30,6 @@ This is a full-stack, three-service application: a React frontend, a Node/Expres
 - [Testing](#testing)
 - [Running this for a demo](#running-this-for-a-demo)
   - [NLI model & memory](#nli-model--memory)
-- [Model performance (legacy MLP)](#model-performance-legacy-mlp)
 - [Project structure](#project-structure)
 - [Known limitations](#known-limitations)
 - [License](#license)
@@ -90,8 +89,6 @@ The one thing this system is deliberately built **not** to do: treat "a search r
 |---|---|
 | **Check a claim** — evidence-first verdict with per-source Verified/Unverified labeling | **How It Works** — the full pipeline, explained |
 | ![Result](docs/screenshots/02-result.png) | ![How It Works](docs/screenshots/03-how-it-works.png) |
-| **Model Comparison** — why the legacy model stays auxiliary | |
-| ![Comparison](docs/screenshots/05-comparison.png) | |
 
 <!-- This project runs locally for demos rather than staying deployed — see
 "Running this for a demo" below for why. If you do stand up a public
@@ -104,7 +101,7 @@ Three independently deployable services:
 ```mermaid
 flowchart LR
     subgraph Client["client/ — React + Vite"]
-        UI[Check / History / Comparison / How It Works UI]
+        UI[Check / History / How It Works UI]
     end
     subgraph Server["server/ — Node + Express"]
         Auth["Google OAuth + JWT"]
@@ -116,7 +113,6 @@ flowchart LR
         NLIModel["NLI cross-encoder<br/>(transformers, CPU)"]
         Embedder["Passage embedder<br/>all-MiniLM-L6-v2 (CPU)"]
         Explainer["Explainer<br/>LLM text, NLI-filtered"]
-        Legacy["Legacy Binary MLP<br/>(auxiliary signal only)"]
     end
     subgraph External["External services"]
         Mongo[(MongoDB Atlas)]
@@ -134,7 +130,6 @@ flowchart LR
     Proxy -->|save result| Mongo
     Pipeline --> NLIModel
     Pipeline --> Embedder
-    Pipeline --> Legacy
     Pipeline --> News
     Pipeline -->|"final verdict + evidence"| Explainer
     Explainer --> Gemini
@@ -215,7 +210,7 @@ These are the non-negotiable rules the codebase is built around — they were th
 - **Being about the right subjects isn't relevance.** `relevance_filter.py` scores whether a document discusses the *action* the claim asserts, using a synonym vocabulary so different wording still matches ("resigned" / "steps down"). For the claim *"the US is going to ban Google"*, an article headlined "Google expands advertising tools in the United States" scored 0.68 and survived strict filtering purely because both entities appeared in it.
 - **An article that addresses nothing is not evidence for anything.** Sources NLI classifies as neutral are shown under *Related coverage*, explicitly not counted. They previously sat under a heading counting them as evidence, with each card asserting the source "supports" or "contradicts" the claim based on whichever score was larger — 0.04 against 0.03.
 - **Search failure ≠ no evidence ≠ false.** `retrieval.status` distinguishes `SEARCH_FAILED` (all providers errored), `NO_RESULTS` (providers ran, found nothing), `NO_RELEVANT_RESULTS` (results found, none relevant), and `SEARCH_SUCCESS`/`SEARCH_PARTIAL`. These are never conflated.
-- **The legacy MLP never determines the verdict.** `binary_truth_mlp.py` is a from-scratch neural net trained on the LIAR political-statements dataset. It's shown in the API response (`ml.score`) for transparency, flagged `auxiliary_only: true`, but the verdict computation (`evidence_verdict_score`, `merge_claim_summaries`) never reads it.
+- **Verdicts come from evidence, never from the wording of the claim.** An earlier version shipped a from-scratch MLP trained on the LIAR political-statements dataset (61.9% against a 56.4% majority baseline). It was only ever shown for transparency and never read by the verdict, and it has been removed: a claim's truth is not deducible from its words, so a wording-only score had no place on the result page.
 - **NLI label order is not standardized across models — never guess it.** Different NLI models emit their entailment/contradiction/neutral labels in different, undocumented orders. `nli_service.py` only trusts a model's real named labels (order-independent) or an explicit, manually-verified per-model lookup table — an unrecognized model emitting raw `LABEL_0`/`LABEL_1`/`LABEL_2` output makes the service report `failed` and abstain, rather than risk silently inverting every verdict.
 - **Credible sources must actually get read.** Only `max_results` candidates are NLI-classified, and they were chosen by lexical relevance alone — which is backwards for a viral false claim, because the posts repeating it use its precise wording while the debunkings do not. Measured on a realistic pool, eight rumour blogs scored 0.78–0.94 and a PolitiFact fact-check scored 0.735, so the fact-check ranked **ninth** and never reached NLI: the system would have classified eight copies of the rumour and reported the claim supported. `RESERVED_TIER_SLOTS` holds places for candidates from a classified source. Reserving seats rather than adding a score bonus keeps relevance ranking untouched — there is no constant weighing "authority" against "aboutness", just a rule that if credible sources were found, some of them get read.
 - **A debunking article is not evidence for the thing it debunks.** A fact-check quotes the claim it refutes — *"Posts claim the United States banned Google in all its cities"* — and an NLI model scores that as strongly entailing, because the claim is literally in the sentence. The strongest entailment and the strongest contradiction are found **independently** across passages, and passages that merely *report* a claim (`_CLAIM_REPORTING_FRAME`) are excluded from the entailment maximum. Ordinary attribution ("officials said", "according to") is deliberately untouched — that is journalism reporting a fact. Reading both scores off whichever single passage scored highest recorded PolitiFact debunkings as *supporting* the claim, at 0.95 source weight.
@@ -368,7 +363,6 @@ check. It changed which passages NLI read for 5 of 8 articles.
 | **NLI** | HuggingFace `transformers` + PyTorch (CPU-only wheel, float32), DeBERTa-v3 NLI cross-encoder — `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli` recommended |
 | **Passage retrieval** | `sentence-transformers` (`all-MiniLM-L6-v2`) fused with lexical ranking by reciprocal rank fusion — in memory, no vector DB |
 | **Explanations** | Gemini Flash via `google-genai` (free tier), every sentence filtered by the NLI model — never an input to the verdict |
-| **Legacy ML** | From-scratch NumPy MLP + TF-IDF vectorizer (no sklearn/PyTorch) — auxiliary signal only |
 | **Search providers** | Google News RSS + Wikipedia (keyless, on by default), GNews / The Guardian / NewsAPI (optional, key-gated), DuckDuckGo HTML (fallback) |
 | **Database** | MongoDB (Atlas or self-hosted) via Mongoose |
 | **Deployment** | Run locally for demos (see [Running this for a demo](#running-this-for-a-demo)); Render + Vercel configs included for reference |
@@ -400,15 +394,6 @@ This is the actual `CheckResponse` shape from `ml-service/main.py`, proxied unch
   "verification": {
     "status": "supported",           // "supported" | "contradicted" | "mixed" | "insufficient_evidence" | "not_objectively_verifiable"
     "reasoning": "Relevant external evidence was found and classified."
-  },
-
-  // The legacy MLP signal. Advisory only — never drives the verdict.
-  "ml": {
-    "available": true,
-    "auxiliary_only": true,
-    "score": 0.61,                   // 0–1 probability from the LIAR-trained MLP
-    "verdict": "probably correct",
-    "threshold": 0.49
   },
 
   // What happened during the search phase.
@@ -446,9 +431,6 @@ This is the actual `CheckResponse` shape from `ml-service/main.py`, proxied unch
   },
 
   // ── Legacy/flattened fields, kept for backward compatibility ──
-  "ml_score": 0.61,
-  "ml_verdict": "probably correct",
-  "ml_threshold": 0.49,
   "evidence_score": 0.85,
   "evidence_stance": { "support": 0.85, "contradiction": 0.02, "net": 0.83, "verdict": "evidence supports the claim", "status": "supported", "..." : "..." },
   "combined_score": 89,              // 5–95 visual evidence-balance score — NOT a probability of truth
@@ -516,9 +498,6 @@ This is the actual `CheckResponse` shape from `ml-service/main.py`, proxied unch
 {
   "status": "ok",
   "service": "newschecker-ml",
-  "model_loaded": true,
-  "input_size": 26626,
-  "threshold": 0.49,
   "nli": {
     "enabled": true,
     "model": "cross-encoder/nli-deberta-v3-base",
@@ -573,7 +552,6 @@ All served by `server/` (Express), all under `/api`:
   createdAt / updatedAt,         // automatic timestamps
 
   // Legacy flattened fields
-  mlScore: Number, mlVerdict: String,
   evidenceScore: Number,
   evidenceStance: { support, contradiction, net, verdict },
   combinedScore: Number, combinedVerdict: String,
@@ -587,7 +565,6 @@ All served by `server/` (Express), all under `/api`:
   claimType: String, verdict: String, confidence: String, reasoning: String,
   externalEvidenceAvailable: Boolean, externalEvidenceChecked: Boolean,
   verification: { status, reasoning },
-  ml: { available, auxiliaryOnly, score, verdict, threshold },
   retrieval: { status, candidateCount, relevantCount, diagnostics: [Mixed] },
   nli: { available, status, classifiedCount },
   evidenceSummary: { supportingCount, contradictingCount, neutralCount, independentGroups },
@@ -679,7 +656,7 @@ The first evidence check (a non-deterministic claim) triggers the NLI model down
 ## Testing
 
 ```bash
-# ML service — 517 tests (pytest + httpx: pip install -r requirements-dev.txt)
+# ML service — 480 tests (pytest + httpx: pip install -r requirements-dev.txt)
 # covering claim normalisation and triage, claim
 # decomposition, coverage modes and article dating, relevance and action
 # filtering, query generation, numeric-consistency and boilerplate guards,
@@ -871,54 +848,6 @@ Budget 1GB+ of RAM regardless of choice — PyTorch's own import footprint is 30
 2. Check the service logs for a line like `NLI model loaded: <model> — id2label={...}` to confirm what label scheme it actually uses.
 3. If `nli.status` comes back `"failed"` with an "unrecognized label" error, the model emits raw `LABEL_0`/`LABEL_1`/`LABEL_2` output that isn't in the verified table — the service is correctly refusing to guess its order. Add it to `_KNOWN_INDEXED_LABEL_ORDERS` in `nli_service.py` only once you've confirmed the real order from the model's config.
 
-## Model performance (legacy MLP)
-
-The **Binary Truth MLP** (`binary_truth_mlp.py`) is a from-scratch NumPy neural network (no PyTorch/sklearn) trained on the **LIAR dataset** (12,836 labeled political statements), collapsed from 6 classes to binary "Fake-ish"/"True-ish".
-
-
-The production-equivalent, statement-only evaluation:
-
-| Metric | Value |
-|---|---|
-| Accuracy | **61.88%**  (95% CI 59.12–64.48) |
-| Majority-class baseline | 56.35% |
-| Precision | 62.09% |
-| Recall | 83.05% |
-| F1 Score | 0.7106 |
-| AUC | 0.6722 |
-| Brier score | 0.2277 |
-| Expected calibration error | 0.0458 |
-
-Two things worth reading off that table rather than the accuracy alone.
-
-**The gap is real.** The 95% bootstrap interval's *lower* bound (59.12%) sits
-above the majority-class baseline (56.35%), so the model beats "always answer
-true" by more than split luck. On 1267 rows a point estimate alone could not
-establish that, which is why the interval is reported and not just the number.
-
-**The probability means roughly what it says.** Expected calibration error is
-0.046 — under the ~0.1 threshold beyond which a score should not be shown to a
-user as a confidence. That matters more here than accuracy does, because this
-number is displayed *and* consumed downstream as a prior: a model that is 62%
-accurate while saying "0.9" when it means "0.6" would be worse than a less
-accurate one that knows what it does not know.
-
-This is now scored through
-`make_prediction_features_batch()` — the same function `main.py` calls — so the
-number describes the model as served. It previously did not: `evaluate_models.py`
-fed the shipped model speaker metadata and real credit-history counts it was
-never trained on and reported **56.9%**, while `evaluate_production_model.py`
-transformed the raw statement instead of going through `build_text_input()` and
-reported **62.35%**. Neither was what a request computes.
-
-This model is **never used to determine the final verdict** — see [Design principles](#design-principles). It's kept visible in the API response and on the Model Comparison page purely for research transparency. Reproduce these numbers with:
-
-```bash
-cd ml-service
-python evaluate_production_model.py    # the metrics above
-python evaluate_models.py              # regenerates evaluation_results.json
-```
-
 ## Project structure
 
 ```
@@ -927,7 +856,7 @@ newschecker/
 │   └── src/
 │       ├── App.jsx                Root component, routing, API calls
 │       └── components/            Header, EvidenceCard, ScoreGauge, ScoreBreakdown,
-│                                   HowItWorks, ModelComparison, ExplanationPanel,
+│                                   HowItWorks, ExplanationPanel,
 │                                   HistoryPanel, LoadingSkeleton
 ├── server/                       Node/Express API gateway
 │   ├── api/index.js                Express app entry (also the Vercel serverless handler)
@@ -952,11 +881,7 @@ newschecker/
 │   ├── claim_verifier.py           Claim splitting, source tiering, publisher resolution
 │   ├── evidence_pipeline.py        Orchestrates the stages above
 │   ├── knowledge_verifier.py       Deterministic checks (arithmetic, well-known facts)
-│   ├── binary_truth_mlp.py         Legacy auxiliary MLP (from-scratch NumPy)
-│   ├── tfidf.py                    From-scratch TF-IDF vectorizer (feeds the legacy MLP only)
-│   ├── classifier.py / mlp_classifier.py   Experimental baselines, offline evaluation only
-│   ├── evaluate_models.py / evaluate_production_model.py   Offline evaluation scripts
-│   └── tests/                      517 tests across the modules above, incl.
+│   └── tests/                      480 tests across the modules above, incl.
 │                                    test_claim_edge_cases.py (end-to-end verdicts)
 ├── docs/screenshots/              README images
 ├── docs/benchmarks/               Saved news_benchmark runs (hybrid vs lexical)
@@ -979,11 +904,6 @@ Being direct about these matters more than pretending they don't exist:
 - **Same kind of event ≠ same event.** "Crash shuts down Route 44" is about a crash closing a route, so it passes the aboutness check, and NLI reads it as contradicting "Crash shuts down Route 209". A differing number can be a genuine contradiction (a rate rise of 0.5% vs 0.25%) or a different referent (Route 44 vs Route 209); `numeric_consistency` only withdraws *support* on a mismatch, and telling the two cases apart for contradictions is open work.
 - **Headline claims with weak queries.** For short headlines, `query_generator` can drop the most specific words ("Morning crash shuts down Route 209" was searched as `Route shuts`), which lets loosely related documents into the pool. The aboutness check limits the damage; it does not fix the queries.
 - **Claim decomposition is regex-based, not a real parser.** `claim_decomposer.py` uses pattern matching for entities/predicates/negation/modality, not dependency parsing or a trained NER model. It works well for the claim shapes it's been tested against but isn't as robust as a full NLP pipeline would be.
-- **The legacy MLP works, and still cannot be a fact-checker.** On the LIAR test set it scores **61.88%** (95% CI 59.12–64.48) against a **56.35%** majority-class baseline. The interval's lower bound clears the baseline, so that +5.5 points is a real effect rather than split luck, and the model is calibrated (ECE 0.046). It is a respectable result for judging a claim from its wording alone.
-
-  It is still not a fact-checker, and the distinction is the architecture's whole premise: 62% on a dated US-political corpus says nothing about whether a specific claim made today is true, because the label is not deducible from the words. Only evidence settles that. So the verdict never reads this model's output — not because the model is weak, but because the task it solves is not the task the user asked.
-
-  (This number was itself a bug for most of the project's life: the model was scored on speaker metadata it was never trained on, reporting 56.9% — see `IMPROVEMENTS.md` bug 34.)
 
 ## License
 

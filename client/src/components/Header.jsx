@@ -18,7 +18,6 @@ export default function Header({ user, onSignOut, onHistoryToggle, historyCount,
   // Define our pages here so we can loop over them below to create the menu.
   const navItems = [
     { key: "", label: "Check" },
-    { key: "comparison", label: "Comparison" },
     { key: "how-it-works", label: "How It Works" },
   ];
 

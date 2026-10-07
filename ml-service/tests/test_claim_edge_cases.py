@@ -372,9 +372,12 @@ class TestDegradedModes(VerdictCaseMixin, unittest.TestCase):
         self.assertEqual(body["nli"]["classified_count"], 0)
         self.assertIn("NLI model is unavailable", body["reasoning"])
 
-    def test_ml_score_is_always_marked_auxiliary(self):
+    def test_no_wording_based_classifier_score_is_returned(self):
+        """The LIAR-trained MLP was removed: verdicts come from evidence only,
+        and no score derived from the claim's wording alone is reported."""
         body = self.check("The prime minister of India resigned this morning")
-        self.assertTrue(body["ml"]["auxiliary_only"])
+        for field in ("ml", "ml_score", "ml_verdict", "ml_threshold"):
+            self.assertNotIn(field, body)
 
     def test_no_results_at_all_is_not_a_finding(self):
         body = self.check(
