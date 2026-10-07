@@ -200,6 +200,15 @@ class TestScoring(unittest.TestCase):
         self.assertAlmostEqual(summary["abstention_rate"], 0.5)
         self.assertAlmostEqual(summary["mean_seconds"], 25.0)
 
+    def test_a_search_outage_is_counted_not_hidden_as_abstention(self):
+        cases = []
+        for retrieval in ("SEARCH_SUCCESS", "SEARCH_FAILED", "NO_RESULTS", "SEARCH_PARTIAL"):
+            c = nb.Case(claim="c", truth="reported", origin="o", retrieval=retrieval)
+            c.status = "insufficient_evidence"
+            c.outcome = nb.classify_outcome(c)
+            cases.append(c)
+        self.assertEqual(nb.summarise(cases)["search_failures"], 2)
+
     def test_the_two_directions_are_never_merged(self):
         """They measure different things and fail differently; a single
         blended 'accuracy' would hide that."""

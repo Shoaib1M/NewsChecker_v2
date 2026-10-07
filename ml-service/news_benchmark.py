@@ -96,6 +96,11 @@ class Case:
     verdict: str = ""
     outcome: str = ""     # correct | missed | wrong
     seconds: float = 0.0
+    # retrieval.status from the response. Recorded because a provider outage
+    # (rate limiting, mostly) turns every case into an abstention, and without
+    # this the run reads as a cautious system rather than a broken network —
+    # which is exactly how one hybrid run was nearly reported as "0% wrong".
+    retrieval: str = ""
 
 
 def usable_headline(title: str) -> bool:
@@ -305,6 +310,7 @@ def classify_outcome(case: Case) -> str:
 # declining to answer, which is what the abstention rate counts. Mixed counts
 # as an abstention on purpose: it asserts neither direction.
 COMMITTED_STATUSES = {"supported", "contradicted", "unsupported_no_coverage"}
+SEARCH_FAILURES = {"SEARCH_FAILED", "NO_RESULTS"}
 
 
 def summarise(cases: list[Case]) -> dict:
@@ -336,6 +342,9 @@ def summarise(cases: list[Case]) -> dict:
         # system that never answers is never wrong.
         "abstention_rate": abstained / len(cases) if cases else 0.0,
         "mean_seconds": sum(c.seconds for c in cases) / len(cases) if cases else 0.0,
+        # Cases whose search never ran. Their verdicts measure the network,
+        # not the pipeline; a run with many of these is not comparable.
+        "search_failures": sum(1 for c in cases if c.retrieval in SEARCH_FAILURES),
     }
 
 
@@ -386,6 +395,7 @@ def run_cases(cases: list[Case], mode: str) -> None:
                 body = response.json()
                 case.status = body.get("verification", {}).get("status", "error")
                 case.verdict = body.get("verdict", "")
+                case.retrieval = body.get("retrieval", {}).get("status", "")
             except Exception as error:  # noqa: BLE001 - a failed case is data
                 case.status = "error"
                 case.verdict = str(error)[:80]
@@ -434,6 +444,13 @@ def report(cases: list[Case], summary: dict) -> None:
     print(f"  ABSTENTION RATE     {100 * summary['abstention_rate']:.1f}%"
           f"   {GREY}no committed verdict either way{RESET}")
     print(f"  MEAN LATENCY        {summary['mean_seconds']:.1f}s per check")
+    failures = summary.get("search_failures", 0)
+    if failures:
+        print(f"  {RED if failures > summary['total'] * 0.2 else YELLOW}"
+              f"SEARCH FAILURES     {failures}/{summary['total']}{RESET}"
+              f"   {GREY}cases where no provider answered — if this is more than"
+              f" a few, the run measures the network, not the pipeline;"
+              f" re-run it{RESET}")
 
     wrong = [c for c in cases if c.outcome == "wrong"]
     if wrong:

@@ -23,3 +23,11 @@ os.environ.setdefault("SEMANTIC_PASSAGES", "false")
 os.environ.setdefault("EXPLANATIONS_ENABLED", "false")
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+
+# The developer's real keys must not reach tests. main.load_env_file() runs in
+# FastAPI's lifespan and copies ml-service/.env into os.environ — it skips any
+# name already set, so an empty value here wins. Without this, the first API
+# test loaded real GNews/Guardian/NewsAPI keys, and every later test that
+# patched "all" providers still sent live queries through the keyed ones.
+for _key in ("GNEWS_API_KEY", "GUARDIAN_API_KEY", "NEWSAPI_KEY", "GOOGLE_API_KEY"):
+    os.environ.setdefault(_key, "")

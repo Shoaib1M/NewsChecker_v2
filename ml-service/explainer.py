@@ -292,7 +292,9 @@ _CITATION_RE = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 # A citation placed after the full stop ("…exists. [2]") belongs to the
 # sentence before it. Moved inside first, or the split hands it to the next.
 _TRAILING_CITATION_RE = re.compile(r"([.!?])((?:\s*\[\d+(?:\s*,\s*\d+)*\])+)")
-_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"'(])")
+# Digits included: "Two sources agree [1]. 3 outlets report X [2]." was one
+# "sentence" checked against both sources jointly.
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(])")
 
 
 def split_explanation(text: str) -> list[str]:

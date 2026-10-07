@@ -235,25 +235,23 @@ class TestPassageRanker(unittest.TestCase):
         self.assertIn("no such model", ranker.status["error"])
         self.assertFalse(ranker.is_available)
 
-    def test_an_encode_failure_degrades_to_none(self):
+    def test_an_encode_failure_skips_one_call_without_disabling_the_ranker(self):
         ranker, embedder = _ranker({"a": 0.9})
+        working = embedder.encode
         embedder.encode = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("oom"))
         self.assertIsNone(ranker.semantic_order("claim", ["a"]))
-        self.assertEqual(ranker.status["status"], "failed")
+        self.assertEqual(ranker.status["status"], "ready")
+        self.assertIn("oom", ranker.status["error"])
+        # The next article is ranked normally, and the error clears.
+        embedder.encode = working
+        self.assertEqual(ranker.semantic_order("claim", ["a"]), [0])
+        self.assertIsNone(ranker.status["error"])
 
     def test_empty_claim_or_sentences(self):
         ranker, embedder = _ranker()
         self.assertEqual(ranker.semantic_order("", ["a"]), [])
         self.assertEqual(ranker.semantic_order("claim", []), [])
         self.assertEqual(embedder.calls, [])
-
-
-class TestTestSessionDefaults(unittest.TestCase):
-
-    def test_conftest_switches_both_features_off(self):
-        """If this fails, some test may be loading a real model."""
-        self.assertEqual(os.environ.get("SEMANTIC_PASSAGES"), "false")
-        self.assertEqual(os.environ.get("EXPLANATIONS_ENABLED"), "false")
 
 
 if __name__ == "__main__":

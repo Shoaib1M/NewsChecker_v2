@@ -357,6 +357,15 @@ class TestTheVerdictIsNeverChanged(unittest.TestCase):
         self.assertFalse(on["explanation"]["available"])
         self.assertEqual(on["explanation"]["text"], "")
 
+    def test_a_crash_inside_the_explainer_cannot_fail_the_check(self):
+        off, _ = self.check("false", "")
+        with patch.object(explainer, "explain", side_effect=KeyError("entailment")):
+            on, _ = self.check("true", "anything")
+        for field in VERDICT_FIELDS:
+            self.assertEqual(on[field], off[field], field)
+        self.assertFalse(on["explanation"]["available"])
+        self.assertEqual(on["explanation"]["reason"], "explanation failed unexpectedly")
+
     def test_a_faithful_explanation_is_returned_alongside_the_same_verdict(self):
         off, _ = self.check("false", "")
         body, _ = self.check(

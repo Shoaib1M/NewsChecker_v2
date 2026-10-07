@@ -993,18 +993,27 @@ def check_statement(request: CheckRequest):
     # only ever placed in `explanation`. It has its own short timeout outside
     # EVIDENCE_BUDGET_SECONDS, and any failure is an abstention, never an
     # error: a check never fails because its explanation did.
-    explanation = (
-        explainer.explain(
-            statement, ev_stance["status"], top_evidence,
-            claim_type=triage.claim_type,
-        )
-        if searched and not knowledge_assessment
-        else explainer.Explanation(
+    if searched and not knowledge_assessment:
+        try:
+            explanation = explainer.explain(
+                statement, ev_stance["status"], top_evidence,
+                claim_type=triage.claim_type,
+            )
+        except Exception as err:  # noqa: BLE001
+            # explain() is written never to raise; this is the guarantee that
+            # an unforeseen bug in it still cannot turn a finished check into
+            # a 500. The verdict above is already computed and stands alone.
+            print(f"Explanation failed: {err}")
+            explanation = explainer.Explanation(
+                available=False, reason="explanation failed unexpectedly",
+                model=explainer.explain_model(),
+            )
+    else:
+        explanation = explainer.Explanation(
             available=False,
             reason="nothing was searched, so there is no evidence to explain",
             model=explainer.explain_model(),
         )
-    )
 
     elapsed = round(time.time() - start, 2)
 

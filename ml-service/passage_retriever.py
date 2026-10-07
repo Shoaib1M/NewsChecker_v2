@@ -136,7 +136,13 @@ class PassageRanker:
         self._model_factory = model_factory
         self._model = None
         self._lock = threading.Lock()
+        # A LOAD failure is sticky: retrying a failed download inside every
+        # request would add its timeout to each one. An ENCODE failure is not:
+        # one bad batch says nothing about the next, and switching dense
+        # ranking off for the rest of the process over it would be a silent,
+        # permanent downgrade. It is recorded here for /api/health instead.
         self._failed_error: str | None = None
+        self._last_encode_error: str | None = None
 
     # ── Public status API ────────────────────────────────────────────
     @property
@@ -158,6 +164,8 @@ class PassageRanker:
             error = "dense passage ranking disabled via SEMANTIC_PASSAGES"
         elif status == self.FAILED:
             error = self._failed_error
+        elif self._last_encode_error:
+            error = f"last request fell back to lexical: {self._last_encode_error}"
         return {
             "enabled": status != self.DISABLED,
             "model": self.model_name,
@@ -237,11 +245,12 @@ class PassageRanker:
                 batch_size=32,
             )
         except Exception as exc:  # noqa: BLE001
-            # An inference failure is reported, not swallowed: the next
-            # /api/health shows it, and this request falls back to lexical.
-            self._failed_error = f"encode failed: {exc}"
+            # Reported, not swallowed: /api/health shows it, and this article
+            # falls back to lexical ranking. The ranker stays usable.
+            self._last_encode_error = str(exc) or exc.__class__.__name__
             print(f"Passage embedding failed: {exc}")
             return None
+        self._last_encode_error = None
 
         claim_vector, sentence_vectors = vectors[0], vectors[1:]
         # Normalised embeddings: the dot product IS the cosine similarity.

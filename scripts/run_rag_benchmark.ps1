@@ -41,7 +41,14 @@ function Invoke-Run([string]$name, [string]$semantic, [string]$floor, [string[]]
   $target = Join-Path $out "$name.json"
   Write-Host "`n=== $name (SEMANTIC_PASSAGES=$semantic, floor=$floor) ===" -ForegroundColor Cyan
   Push-Location $ml
-  try { & $python news_benchmark.py @source --save $target } finally { Pop-Location }
+  # "Continue" around the native call: Windows PowerShell 5.1 turns a native
+  # program's stderr (here, library deprecation warnings) into error records,
+  # and under "Stop" the first warning would abort the whole sweep.
+  $previous = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try { & $python news_benchmark.py @source --save $target }
+  finally { $ErrorActionPreference = $previous; Pop-Location }
+  if ($LASTEXITCODE -ne 0) { throw "news_benchmark.py failed for $name (exit $LASTEXITCODE)" }
 }
 
 Invoke-Run "lexical_run1" "false" "0.30" @("--limit", "$Limit")

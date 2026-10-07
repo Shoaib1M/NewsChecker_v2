@@ -27,6 +27,7 @@ import {
   Layers,
   Calculator,
   Code2,
+  MessageSquareCheck,
 } from "lucide-react";
 
 // Final architecture for the end-to-end fact-checking pipeline.
@@ -94,7 +95,9 @@ id: "nli",
 icon: <Brain className="hiw-step-icon" />,
 title: "Evidence reading and NLI",
 short: "Check the claim against the actual passage",
-detail: `When article text is available, the system extracts the useful passage and compares the claim directly against that passage.
+detail: `When article text is available, the system extracts the useful passages and compares the claim directly against them.
+
+Which passages get read is decided by hybrid retrieval: sentence embeddings (all-MiniLM-L6-v2) find sentences that MEAN the same as the claim, word overlap finds exact matches on names and numbers, and the two rankings are merged with reciprocal rank fusion. Without the embeddings, a debunk written in its own words — "Washington has not prohibited the search giant" for a claim about banning Google — shares no words with the claim and was never read.
 
 The key question is not "Does the article title mention the same words?" but "Does the evidence passage support, contradict, or remain neutral about the claim?" This is where NLI/stance classification matters.`,
   },
@@ -108,6 +111,17 @@ detail: `The verdict weighs each source by tier — primary, fact-check, reporti
 Each direction is scored only over the sources that take it, so background coverage that says nothing either way cannot dilute a real signal. A direction has to clearly outweigh the other to win outright; otherwise the evidence is genuinely contested and we say so.
 
 Where a search ran properly across several providers and found nothing supporting a claim that would certainly have been reported, we report that as a finding — "no credible source reports this" — rather than as a failure to check. That is deliberately narrow: it never applies to a negated claim, a thin candidate pool, a failed search, or an unavailable NLI model, because those tell us nothing about the world.`,
+  },
+  {
+id: "explanation",
+icon: <MessageSquareCheck className="hiw-step-icon" />,
+title: "Grounded explanation",
+short: "An LLM explains the verdict; NLI checks every sentence",
+detail: `Once the verdict is final, Gemini Flash writes two to four sentences explaining why the evidence leads to it, citing each source as [n].
+
+Every sentence is then checked by the same NLI model against the source it cites. A sentence with no citation, a citation to a source it was not given, or a claim its source does not entail is dropped before you see it. If the NLI model is unavailable, no explanation is shown at all.
+
+The LLM never decides or changes the verdict — it runs after the verdict is computed, and nothing reads its output back.`,
   },
 ];
 
@@ -197,7 +211,7 @@ export default function HowItWorks() {
           <EvidencePipelineDiagram />
         </div>
         <p className="hiw-arch-caption">
-          Claim understanding → targeted retrieval → relevance filtering → article passage analysis → NLI/stance → source quality check → evidence fusion → verdict.
+          Claim understanding → targeted retrieval → relevance filtering → hybrid passage selection → NLI/stance → source quality check → evidence fusion → verdict → NLI-checked explanation.
         </p>
       </div>
 
