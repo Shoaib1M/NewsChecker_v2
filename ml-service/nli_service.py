@@ -142,13 +142,16 @@ class NLIService:
         pipeline_factory: Callable | None = None,
         model_name: str | None = None,
     ):
-        # Defaults to the BASE checkpoint. This project runs locally, where a
-        # few hundred megabytes of weights cost nothing, and stance is the
-        # model that decides every verdict — so the larger checkpoint is spent
-        # exactly where it pays. The smaller ones remain one env var away, and
-        # all four are pre-verified in the label-order table above.
+        # Defaults to an MNLI + FEVER + ANLI checkpoint, not the SNLI-trained
+        # cross-encoder family. SNLI labels unrelated pairs "contradiction",
+        # and cross-encoder/nli-deberta-v3-small scored an unrelated sentence
+        # as a 1.00 contradiction of the claim. On stance_sweep.py's labelled
+        # corpus this checkpoint scores 0.91 accuracy against 0.61 and invents
+        # 2 positions against 6. It emits named labels, so it needs no entry in
+        # the label-order table; the cross-encoder models remain one env var
+        # away and are pre-verified there.
         self.model_name: str = model_name or os.getenv(
-            "NLI_MODEL", "cross-encoder/nli-deberta-v3-base"
+            "NLI_MODEL", "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli"
         )
         self._pipeline_factory = pipeline_factory
         self._pipeline = None
