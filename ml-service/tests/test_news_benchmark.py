@@ -184,6 +184,22 @@ class TestScoring(unittest.TestCase):
         self.assertEqual(summary["wrong_answers"], 1)
         self.assertAlmostEqual(summary["wrong_answer_rate"], 0.25)
 
+    def test_abstention_recall_and_latency_are_reported(self):
+        cases = []
+        for truth, status, seconds in (("reported", "supported", 10.0),
+                                       ("reported", "insufficient_evidence", 20.0),
+                                       ("corrupted", "mixed", 30.0),
+                                       ("corrupted", "unsupported_no_coverage", 40.0)):
+            c = nb.Case(claim="c", truth=truth, origin="o", seconds=seconds)
+            c.status = status
+            c.outcome = nb.classify_outcome(c)
+            cases.append(c)
+        summary = nb.summarise(cases)
+        self.assertAlmostEqual(summary["confirmation_recall"], 0.5)
+        # insufficient_evidence and mixed commit to neither direction.
+        self.assertAlmostEqual(summary["abstention_rate"], 0.5)
+        self.assertAlmostEqual(summary["mean_seconds"], 25.0)
+
     def test_the_two_directions_are_never_merged(self):
         """They measure different things and fail differently; a single
         blended 'accuracy' would hide that."""

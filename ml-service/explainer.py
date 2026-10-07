@@ -71,7 +71,13 @@ DEFAULT_FALLBACK_MODELS = "gemini-3.5-flash-lite"
 # Per attempt. The explanation runs after the evidence budget, so this is
 # extra latency on every explained check, bounded at
 # timeout × (1 + number of fallbacks).
-DEFAULT_TIMEOUT_SECONDS = 8.0
+DEFAULT_TIMEOUT_SECONDS = 10.0
+# The Gemini API rejects any request deadline below 10s with a 400
+# ("Manually set deadline 8s is too short"), so the deadline SENT to it is
+# clamped up to this. A shorter EXPLAIN_TIMEOUT_SECONDS is still honoured by
+# the wall-clock limit in generate_text — the request is just abandoned
+# locally instead of being refused remotely.
+GEMINI_MIN_DEADLINE_SECONDS = 10.0
 
 # The explanation is a few sentences over a handful of sources. More sources
 # than this make the prompt longer without making the explanation better,
@@ -249,7 +255,9 @@ def _call_gemini(prompt: str, model: str, api_key: str, timeout: float) -> str:
 
     client = genai.Client(
         api_key=api_key,
-        http_options=types.HttpOptions(timeout=int(timeout * 1000)),
+        http_options=types.HttpOptions(
+            timeout=int(max(timeout, GEMINI_MIN_DEADLINE_SECONDS) * 1000),
+        ),
     )
     response = client.models.generate_content(
         model=model,

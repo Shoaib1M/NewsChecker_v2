@@ -46,7 +46,10 @@ function getSourceTierBadge(tier) {
   return tierLabels[tier] || 'Source';
 }
 
-export default function EvidenceCard({ evidence, index }) {
+// `position` is this source's 1-based place in top_evidence — the number the
+// explanation cites it by. The id is built from it (not from `index`, which
+// restarts at 0 in each section) so a citation finds exactly one card.
+export default function EvidenceCard({ evidence, index, position }) {
   const {
     title,
     url,
@@ -91,7 +94,7 @@ export default function EvidenceCard({ evidence, index }) {
     <div
       className="evidence-card"
       style={{ animationDelay: `${index * 0.08}s` }}
-      id={`evidence-card-${index}`}
+      id={position ? `evidence-${position}` : undefined}
     >
       <div className="evidence-card-header">
         <div className="evidence-source">
@@ -105,7 +108,10 @@ export default function EvidenceCard({ evidence, index }) {
             />
           )}
           <div className="evidence-source-info">
-            <span className="evidence-domain">{domain}</span>
+            <span className="evidence-domain">
+              {position ? <span className="evidence-number">[{position}]</span> : null}
+              {domain}
+            </span>
             <span className="evidence-tier">{tierLabel}</span>
           </div>
         </div>

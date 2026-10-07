@@ -24,6 +24,7 @@ import Header from "./components/Header";
 import ScoreGauge from "./components/ScoreGauge";
 import ScoreBreakdown from "./components/ScoreBreakdown";
 import EvidenceCard from "./components/EvidenceCard";
+import ExplanationPanel from "./components/ExplanationPanel";
 import LoadingSkeleton from "./components/LoadingSkeleton";
 import HistoryPanel from "./components/HistoryPanel";
 import ModelEvaluation from "./components/ModelEvaluation";
@@ -579,6 +580,10 @@ function App() {
                   {result.reasoning}
                 </p>
               )}
+              {/* LLM explanation of the verdict above — never an input to
+                  it. Renders nothing unless every shown sentence passed the
+                  NLI faithfulness check. */}
+              <ExplanationPanel explanation={result.explanation} />
               <p className="assessment-note">
                 {result.claim_type} · {result.confidence} confidence
                 {result.external_evidence_available
@@ -732,7 +737,12 @@ function App() {
                     </p>
                     <div className="evidence-grid">
                       {evidence.map((ev, i) => (
-                        <EvidenceCard key={ev.url || i} evidence={ev} index={i} />
+                        <EvidenceCard
+                          key={ev.url || i}
+                          evidence={ev}
+                          index={i}
+                          position={result.top_evidence.indexOf(ev) + 1}
+                        />
                       ))}
                     </div>
                   </>
@@ -752,7 +762,12 @@ function App() {
                     </p>
                     <div className="evidence-grid">
                       {context.map((ev, i) => (
-                        <EvidenceCard key={ev.url || i} evidence={ev} index={i} />
+                        <EvidenceCard
+                          key={ev.url || i}
+                          evidence={ev}
+                          index={i}
+                          position={result.top_evidence.indexOf(ev) + 1}
+                        />
                       ))}
                     </div>
                   </>

@@ -300,6 +300,13 @@ def classify_outcome(case: Case) -> str:
     return "missed"
 
 
+# A verdict that commits to an answer about the claim. Everything else —
+# insufficient evidence, mixed, a future event, not a claim — is the system
+# declining to answer, which is what the abstention rate counts. Mixed counts
+# as an abstention on purpose: it asserts neither direction.
+COMMITTED_STATUSES = {"supported", "contradicted", "unsupported_no_coverage"}
+
+
 def summarise(cases: list[Case]) -> dict:
     def tally(subset):
         return {
@@ -312,12 +319,23 @@ def summarise(cases: list[Case]) -> dict:
     reported = [c for c in cases if c.truth == "reported"]
     corrupted = [c for c in cases if c.truth == "corrupted"]
     wrong = sum(1 for c in cases if c.outcome == "wrong")
+    abstained = sum(1 for c in cases if c.status not in COMMITTED_STATUSES)
     return {
         "reported": tally(reported),
         "corrupted": tally(corrupted),
         "total": len(cases),
         "wrong_answers": wrong,
         "wrong_answer_rate": wrong / len(cases) if cases else 0.0,
+        # Recall over real headlines — an UPPER bound, see the module docstring.
+        "confirmation_recall": (
+            sum(1 for c in reported if c.outcome == "correct") / len(reported)
+            if reported else 0.0
+        ),
+        # How often no committed verdict was given at all. Reported beside the
+        # wrong-answer rate because either can be bought with the other: a
+        # system that never answers is never wrong.
+        "abstention_rate": abstained / len(cases) if cases else 0.0,
+        "mean_seconds": sum(c.seconds for c in cases) / len(cases) if cases else 0.0,
     }
 
 
@@ -413,6 +431,9 @@ def report(cases: list[Case], summary: dict) -> None:
     print(f"\n  {colour}WRONG-ANSWER RATE   {summary['wrong_answers']}/{summary['total']}"
           f"   {100 * rate:.1f}%{RESET}"
           f"   {GREY}confident statements that were false{RESET}")
+    print(f"  ABSTENTION RATE     {100 * summary['abstention_rate']:.1f}%"
+          f"   {GREY}no committed verdict either way{RESET}")
+    print(f"  MEAN LATENCY        {summary['mean_seconds']:.1f}s per check")
 
     wrong = [c for c in cases if c.outcome == "wrong"]
     if wrong:
@@ -459,7 +480,7 @@ def main() -> int:
     rng = random.Random(args.seed)
 
     if args.from_file:
-        saved = json.loads(Path(args.from_file).read_text())
+        saved = json.loads(Path(args.from_file).read_text(encoding="utf-8"))
         headlines = [c["origin"] for c in saved["cases"] if c["truth"] == "reported"]
         print(f"\nRe-scoring {len(headlines)} saved headlines.\n")
     else:
@@ -482,7 +503,9 @@ def main() -> int:
     report(cases, summary)
 
     if args.save:
-        Path(args.save).write_text(json.dumps(
+        # UTF-8 explicitly: the Windows default codepage cannot encode every
+        # headline, and a crash here loses the whole run.
+        Path(args.save).write_text(encoding="utf-8", data=json.dumps(
             {"summary": summary, "mode": args.mode, "seed": args.seed,
              "cases": [asdict(c) for c in cases]}, indent=2))
         print(f"  Saved to {args.save}\n")

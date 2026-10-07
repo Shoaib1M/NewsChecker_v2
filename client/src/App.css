@@ -2234,3 +2234,57 @@
   }
   .app-footer { padding-bottom: 4rem; }
 }
+
+/* ── Grounded explanation (NLI-checked) ─────────────────────────────── */
+.explanation-panel {
+  margin: 0.8rem 0 0.2rem;
+  padding: 0.75rem 0.9rem;
+  border-left: 3px solid var(--purple);
+  background: var(--purple-faint);
+  border-radius: 0 6px 6px 0;
+}
+.explanation-label {
+  margin: 0 0 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--purple-dark);
+}
+.explanation-body {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--gray-800);
+}
+.explanation-note {
+  margin: 0.45rem 0 0;
+  font-size: 0.72rem;
+  color: var(--gray-500);
+}
+.citation-group { white-space: nowrap; color: var(--gray-500); }
+.citation-link {
+  border: none;
+  background: none;
+  padding: 0 1px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--purple);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.citation-link:hover,
+.citation-link:focus-visible { color: var(--purple-dark); outline: none; text-decoration-thickness: 2px; }
+.evidence-number {
+  margin-right: 0.35rem;
+  font-weight: 600;
+  color: var(--purple);
+}
+.evidence-card.evidence-highlight {
+  animation: evidenceHighlight 2.2s ease-out;
+}
+@keyframes evidenceHighlight {
+  0%, 35% { border-color: var(--purple); box-shadow: 0 0 0 3px var(--purple-light); }
+  100% { border-color: var(--gray-200); box-shadow: none; }
+}
