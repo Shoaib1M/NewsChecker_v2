@@ -90,8 +90,8 @@ The one thing this system is deliberately built **not** to do: treat "a search r
 |---|---|
 | **Check a claim** — evidence-first verdict with per-source Verified/Unverified labeling | **How It Works** — the full pipeline, explained |
 | ![Result](docs/screenshots/02-result.png) | ![How It Works](docs/screenshots/03-how-it-works.png) |
-| **Model Evaluation** — honest, non-inflated legacy-MLP metrics | **Model Comparison** — why the legacy model stays auxiliary |
-| ![Evaluation](docs/screenshots/04-evaluation.png) | ![Comparison](docs/screenshots/05-comparison.png) |
+| **Model Comparison** — why the legacy model stays auxiliary | |
+| ![Comparison](docs/screenshots/05-comparison.png) | |
 
 <!-- This project runs locally for demos rather than staying deployed — see
 "Running this for a demo" below for why. If you do stand up a public
@@ -104,7 +104,7 @@ Three independently deployable services:
 ```mermaid
 flowchart LR
     subgraph Client["client/ — React + Vite"]
-        UI[Check / History / Evaluation / Comparison UI]
+        UI[Check / History / Comparison / How It Works UI]
     end
     subgraph Server["server/ — Node + Express"]
         Auth["Google OAuth + JWT"]
@@ -901,7 +901,7 @@ number is displayed *and* consumed downstream as a prior: a model that is 62%
 accurate while saying "0.9" when it means "0.6" would be worse than a less
 accurate one that knows what it does not know.
 
-Both this and the Model Evaluation page are now scored through
+This is now scored through
 `make_prediction_features_batch()` — the same function `main.py` calls — so the
 number describes the model as served. It previously did not: `evaluate_models.py`
 fed the shipped model speaker metadata and real credit-history counts it was
@@ -909,7 +909,7 @@ never trained on and reported **56.9%**, while `evaluate_production_model.py`
 transformed the raw statement instead of going through `build_text_input()` and
 reported **62.35%**. Neither was what a request computes.
 
-This model is **never used to determine the final verdict** — see [Design principles](#design-principles). It's kept visible in the API response and on the Model Evaluation/Comparison pages purely for research transparency. Reproduce these numbers with:
+This model is **never used to determine the final verdict** — see [Design principles](#design-principles). It's kept visible in the API response and on the Model Comparison page purely for research transparency. Reproduce these numbers with:
 
 ```bash
 cd ml-service
@@ -925,7 +925,7 @@ newschecker/
 │   └── src/
 │       ├── App.jsx                Root component, routing, API calls
 │       └── components/            Header, EvidenceCard, ScoreGauge, ScoreBreakdown,
-│                                   HowItWorks, ModelEvaluation, ModelComparison,
+│                                   HowItWorks, ModelComparison, ExplanationPanel,
 │                                   HistoryPanel, LoadingSkeleton
 ├── server/                       Node/Express API gateway
 │   ├── api/index.js                Express app entry (also the Vercel serverless handler)
@@ -979,7 +979,7 @@ Being direct about these matters more than pretending they don't exist:
 - **Claim decomposition is regex-based, not a real parser.** `claim_decomposer.py` uses pattern matching for entities/predicates/negation/modality, not dependency parsing or a trained NER model. It works well for the claim shapes it's been tested against but isn't as robust as a full NLP pipeline would be.
 - **The legacy MLP works, and still cannot be a fact-checker.** On the LIAR test set it scores **61.88%** (95% CI 59.12–64.48) against a **56.35%** majority-class baseline. The interval's lower bound clears the baseline, so that +5.5 points is a real effect rather than split luck, and the model is calibrated (ECE 0.046). It is a respectable result for judging a claim from its wording alone.
 
-  It is still not a fact-checker, and the distinction is the architecture's whole premise: 62% on a dated US-political corpus says nothing about whether a specific claim made today is true, because the label is not deducible from the words. Only evidence settles that. So the verdict never reads this model's output — not because the model is weak, but because the task it solves is not the task the user asked. The Evaluation page states the baseline next to the accuracy rather than showing the figure on its own.
+  It is still not a fact-checker, and the distinction is the architecture's whole premise: 62% on a dated US-political corpus says nothing about whether a specific claim made today is true, because the label is not deducible from the words. Only evidence settles that. So the verdict never reads this model's output — not because the model is weak, but because the task it solves is not the task the user asked.
 
   (This number was itself a bug for most of the project's life: the model was scored on speaker metadata it was never trained on, reporting 56.9% — see `IMPROVEMENTS.md` bug 34.)
 

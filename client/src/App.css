@@ -524,39 +524,6 @@
 .breakdown-item-muted { opacity: 0.55; }
 .breakdown-item-muted .breakdown-bar-fill { background: var(--gray-400); }
 
-/* Accuracy-vs-baseline card on the evaluation page. Neutral styling on
-   purpose: this is a caveat, not a headline metric. */
-.eval-baseline-card {
-  margin: 0.9rem 0 1.4rem;
-  padding: 0.85rem 1rem;
-  border: 1px solid var(--gray-200);
-  border-radius: 10px;
-  background: var(--gray-50, #fafafa);
-}
-
-.eval-baseline-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 1rem;
-  font-size: 0.8rem;
-  color: var(--gray-600);
-  padding: 0.15rem 0;
-}
-
-.eval-baseline-value {
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  color: var(--gray-700);
-}
-
-.eval-baseline-note {
-  margin: 0.55rem 0 0;
-  font-size: 0.75rem;
-  line-height: 1.55;
-  color: var(--gray-500);
-}
-
 /* Loading status line — elapsed time plus, after a threshold, why the wait
    is long. Muted so it sits under the skeleton rather than competing. */
 .skeleton-status {
@@ -732,14 +699,14 @@
 
 .evidence-favicon { width: 14px; height: 14px; border-radius: 2px; }
 
-.evidence-domain { 
-  font-size: 0.75rem; 
+.evidence-domain {
+  font-size: 0.75rem;
   color: var(--gray-600);
   font-weight: 500;
 }
 
-.evidence-tier { 
-  font-size: 0.65rem; 
+.evidence-tier {
+  font-size: 0.65rem;
   color: var(--gray-400);
   font-weight: 400;
 }
@@ -785,9 +752,9 @@
   margin-bottom: 0.4rem;
 }
 
-.strength-label { 
-  font-size: 0.72rem; 
-  color: var(--gray-400); 
+.strength-label {
+  font-size: 0.72rem;
+  color: var(--gray-400);
   min-width: 50px;
   font-weight: 500;
 }
@@ -809,9 +776,9 @@
 .strength-bar-fill.support { background: var(--green); }
 .strength-bar-fill.contradiction { background: var(--red); }
 
-.strength-value { 
-  font-size: 0.72rem; 
-  font-weight: 600; 
+.strength-value {
+  font-size: 0.72rem;
+  font-weight: 600;
   color: var(--gray-600);
   min-width: 25px;
   text-align: right;
@@ -1048,12 +1015,6 @@
   font-weight: 600;
 }
 
-/* ==========================================================================
-   Model Evaluation Page
-   ========================================================================== */
-
-.eval-page { animation: fadeUp 0.4s ease-out; }
-
 .eval-loading {
   display: flex;
   flex-direction: column;
@@ -1063,16 +1024,6 @@
   height: 300px;
   color: var(--gray-400);
   font-size: 0.9rem;
-}
-
-/* Dataset Card */
-.eval-dataset-card {
-  background: var(--gray-50);
-  border: 1px solid var(--gray-200);
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-  animation: fadeUp 0.4s ease-out 0.05s both;
 }
 
 .eval-section-title {
@@ -1086,501 +1037,6 @@
 }
 
 .eval-icon { font-size: 1.1rem; }
-
-.eval-auc-badge {
-  margin-left: auto;
-  padding: 0.2rem 0.6rem;
-  background: var(--blue-bg);
-  color: var(--blue);
-  border-radius: 6px;
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-.eval-dataset-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-  margin-bottom: 1.25rem;
-}
-
-.eval-dataset-stat {
-  text-align: center;
-  padding: 0.75rem;
-  background: var(--white);
-  border-radius: 8px;
-  border: 1px solid var(--gray-200);
-}
-
-.eval-stat-number {
-  display: block;
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: var(--purple);
-  letter-spacing: -0.02em;
-}
-
-.eval-stat-label {
-  font-size: 0.75rem;
-  color: var(--gray-500);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-/* Label distribution */
-.eval-label-dist { margin-bottom: 0.75rem; }
-
-.eval-label-dist-title {
-  font-size: 0.78rem;
-  color: var(--gray-500);
-  font-weight: 500;
-  margin-bottom: 0.5rem;
-}
-
-.eval-label-bars {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.eval-label-bar-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.eval-label-name {
-  font-size: 0.72rem;
-  font-weight: 500;
-  color: var(--gray-600);
-  min-width: 80px;
-}
-
-.eval-label-bar-track {
-  flex: 1;
-  height: 6px;
-  background: var(--gray-200);
-  border-radius: 99px;
-  overflow: hidden;
-}
-
-.eval-label-bar-fill {
-  height: 100%;
-  background: var(--purple);
-  border-radius: 99px;
-  transition: width 0.8s ease-out;
-}
-
-.eval-label-count {
-  font-size: 0.72rem;
-  font-weight: 500;
-  color: var(--gray-500);
-  min-width: 72px;
-  text-align: right;
-}
-
-.eval-binary-note {
-  font-size: 0.75rem;
-  color: var(--gray-400);
-  padding: 0.5rem 0.75rem;
-  background: var(--purple-faint);
-  border-radius: 6px;
-  border-left: 3px solid var(--purple);
-}
-
-/* Model Selector */
-.eval-model-selector {
-  display: flex;
-  gap: 0.4rem;
-  margin-bottom: 1.5rem;
-  animation: fadeUp 0.4s ease-out 0.1s both;
-}
-
-.eval-model-tab {
-  padding: 0.55rem 1rem;
-  font-size: 0.82rem;
-  font-weight: 500;
-  color: var(--gray-600);
-  background: var(--gray-100);
-  border-radius: 8px;
-  transition: all 0.15s;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-.eval-model-tab:hover { background: var(--gray-200); }
-.eval-model-tab.active {
-  background: var(--purple);
-  color: var(--white);
-}
-
-.eval-prod-badge {
-  padding: 0.1rem 0.35rem;
-  background: rgba(255,255,255,0.25);
-  border-radius: 4px;
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-.eval-model-tab:not(.active) .eval-prod-badge {
-  background: var(--green-bg);
-  color: var(--green);
-}
-
-/* Metrics Grid */
-.eval-metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  animation: fadeUp 0.4s ease-out 0.15s both;
-}
-
-.eval-metric-card {
-  background: var(--white);
-  border: 1px solid var(--gray-200);
-  border-radius: 10px;
-  padding: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.eval-metric-card:hover {
-  border-color: var(--gray-300);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-}
-
-.eval-metric-gauge {
-  position: relative;
-  width: 88px;
-  height: 88px;
-}
-
-.eval-metric-svg {
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-
-.eval-metric-bg {
-  fill: none;
-  stroke: var(--gray-200);
-  stroke-width: 6;
-}
-
-.eval-metric-fill {
-  fill: none;
-  stroke-width: 6;
-  stroke-linecap: round;
-  transition: stroke-dashoffset 1.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.eval-metric-number {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.15rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-.eval-metric-label {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--gray-500);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-/* Charts Row */
-.eval-charts-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-  margin-bottom: 1.5rem;
-  animation: fadeUp 0.4s ease-out 0.2s both;
-}
-
-.eval-chart-card {
-  background: var(--white);
-  border: 1px solid var(--gray-200);
-  border-radius: 12px;
-  padding: 1.5rem;
-}
-.eval-chart-card.eval-full-width {
-  animation: fadeUp 0.4s ease-out 0.25s both;
-  margin-bottom: 1.5rem;
-}
-
-.eval-chart-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1rem;
-}
-.eval-chart-header .eval-section-title { margin-bottom: 0; }
-
-.eval-cm-toggle {
-  display: flex;
-  gap: 0.25rem;
-}
-
-.eval-cm-btn {
-  padding: 0.3rem 0.6rem;
-  font-size: 0.72rem;
-  font-weight: 500;
-  color: var(--gray-500);
-  background: var(--gray-100);
-  border-radius: 5px;
-  transition: all 0.15s;
-}
-.eval-cm-btn:hover { background: var(--gray-200); }
-.eval-cm-btn.active {
-  background: var(--purple);
-  color: var(--white);
-}
-
-/* Confusion Matrix */
-.eval-cm {
-  display: grid;
-  grid-template-columns: 80px repeat(2, 1fr);
-  gap: 3px;
-}
-.eval-cm-large {
-  grid-template-columns: 60px repeat(6, 1fr);
-}
-
-.eval-cm-corner {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 0.5rem;
-  background: var(--gray-50);
-  border-radius: 6px;
-  border: 1px solid var(--gray-200);
-}
-
-.eval-cm-axis-label {
-  font-size: 0.65rem;
-  color: var(--gray-500);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.eval-cm-axis-pred {
-  align-self: flex-end;
-  color: var(--gray-800);
-}
-.eval-cm-axis-actual {
-  align-self: flex-start;
-}
-
-.eval-cm-col-label,
-.eval-cm-row-label {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--gray-600);
-  padding: 0.35rem 0.2rem;
-}
-.eval-cm-col-label { text-align: center; }
-.eval-cm-row-label { text-align: right; padding-right: 0.5rem; justify-content: flex-end; }
-
-.eval-cm-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 0.6rem 0.3rem;
-  border-radius: 6px;
-  transition: transform 0.15s;
-  cursor: default;
-  min-height: 52px;
-}
-.eval-cm-cell:hover { transform: scale(1.05); }
-
-.eval-cm-val {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--gray-900);
-}
-.eval-cm-pct {
-  font-size: 0.65rem;
-  color: var(--gray-500);
-}
-
-.eval-cm-large .eval-cm-val { font-size: 0.82rem; }
-.eval-cm-large .eval-cm-cell { padding: 0.4rem 0.2rem; min-height: 42px; }
-
-/* ROC Curve */
-.eval-roc-container {
-  display: flex;
-  justify-content: center;
-}
-
-.eval-roc-svg {
-  width: 100%;
-  max-width: 320px;
-  height: auto;
-}
-
-.eval-roc-grid {
-  stroke: var(--gray-200);
-  stroke-width: 0.5;
-  stroke-dasharray: 3 3;
-}
-
-.eval-roc-baseline {
-  stroke: var(--gray-300);
-  stroke-width: 1;
-  stroke-dasharray: 5 5;
-}
-
-.eval-roc-baseline-label {
-  font-size: 9px;
-  fill: var(--gray-400);
-  font-style: italic;
-}
-
-.eval-roc-area {
-  fill: rgba(37, 99, 235, 0.08);
-}
-
-.eval-roc-line {
-  fill: none;
-  stroke: var(--blue);
-  stroke-width: 2.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.eval-roc-axis {
-  stroke: var(--gray-400);
-  stroke-width: 1;
-}
-
-.eval-roc-axis-text {
-  font-size: 9px;
-  fill: var(--gray-500);
-  font-weight: 600;
-}
-
-.eval-roc-tick {
-  font-size: 8px;
-  fill: var(--gray-400);
-}
-
-.eval-threshold-note {
-  font-size: 0.78rem;
-  color: var(--gray-500);
-  text-align: center;
-  margin-top: 0.75rem;
-}
-
-/* Per-class metrics table */
-.eval-per-class-table {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.eval-pc-header {
-  display: grid;
-  grid-template-columns: 100px 1fr 1fr 1fr 60px;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--gray-500);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--gray-200);
-}
-
-.eval-pc-row {
-  display: grid;
-  grid-template-columns: 100px 1fr 1fr 1fr 60px;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 6px;
-  animation: fadeUp 0.3s ease-out both;
-  transition: background 0.15s;
-}
-.eval-pc-row:hover { background: var(--gray-50); }
-
-.eval-pc-label {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--gray-700);
-}
-
-.eval-pc-support {
-  font-size: 0.78rem;
-  color: var(--gray-400);
-  text-align: right;
-}
-
-.eval-bar-value {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.eval-bar-track {
-  flex: 1;
-  height: 6px;
-  background: var(--gray-200);
-  border-radius: 99px;
-  overflow: hidden;
-}
-
-.eval-bar-fill {
-  height: 100%;
-  border-radius: 99px;
-  transition: width 0.8s ease-out;
-}
-
-.eval-bar-num {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--gray-600);
-  min-width: 32px;
-}
-
-/* Details Grid */
-.eval-details-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-}
-
-.eval-detail-item {
-  padding: 0.75rem;
-  background: var(--gray-50);
-  border-radius: 8px;
-}
-
-.eval-detail-label {
-  display: block;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--gray-400);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 0.25rem;
-}
-
-.eval-detail-value {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--gray-700);
-}
 
 /* ==========================================================================
    Model Comparison Page
@@ -2176,11 +1632,10 @@
    ========================================================================== */
 
 @media (max-width: 900px) {
-  .eval-charts-row { grid-template-columns: 1fr; }
-  .eval-metrics-grid { grid-template-columns: repeat(2, 1fr); }
+
   .comp-why-grid { grid-template-columns: 1fr; }
   .hiw-tech-grid { grid-template-columns: repeat(2, 1fr); }
-  .eval-details-grid { grid-template-columns: 1fr; }
+
 }
 
 @media (max-width: 600px) {
@@ -2192,12 +1647,6 @@
 
   .header-nav { display: none; }
   .header-inner { position: relative; }
-
-  .eval-metrics-grid { grid-template-columns: repeat(2, 1fr); }
-  .eval-dataset-grid { grid-template-columns: 1fr; }
-  .eval-model-selector { flex-wrap: wrap; }
-  .eval-pc-header,
-  .eval-pc-row { grid-template-columns: 70px 1fr 1fr 1fr 40px; font-size: 0.7rem; }
 
   .comp-table-wrapper { overflow-x: auto; }
   .comp-table { min-width: 550px; }

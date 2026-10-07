@@ -8,7 +8,7 @@ FLOW:
 1. useHashRouter: Manages simple navigation without needing a complex library like React Router.
 2. User Session: Checks if the user is logged in via Google OAuth.
 3. API Calls: Handles sending statements to the backend and fetching history.
-4. Render: Displays the Header, the main content (Home, Evaluation, Comparison, etc.), and the Footer.
+4. Render: Displays the Header, the main content (Home, Comparison, How It Works), and the Footer.
 
 WHY THIS EXISTS:
 We need a central "brain" for the frontend to manage the state that is shared across multiple components
@@ -27,7 +27,6 @@ import EvidenceCard from "./components/EvidenceCard";
 import ExplanationPanel from "./components/ExplanationPanel";
 import LoadingSkeleton from "./components/LoadingSkeleton";
 import HistoryPanel from "./components/HistoryPanel";
-import ModelEvaluation from "./components/ModelEvaluation";
 import ModelComparison from "./components/ModelComparison";
 import HowItWorks from "./components/HowItWorks";
 
@@ -403,8 +402,6 @@ function App() {
   */
   const renderPage = () => {
     switch (page) {
-      case "evaluation":
-        return <ModelEvaluation />;
       case "comparison":
         return <ModelComparison />;
       case "how-it-works":
